@@ -1,0 +1,18 @@
+import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { DbModule } from './db/db.module';
+import { AuthModule } from './auth/auth.module';
+import { CatalogoModule } from './catalogo/catalogo.module';
+import { MesasModule } from './mesas/mesas.module';
+import { OperacionModule } from './operacion/operacion.module';
+import { PrintModule } from './print/print.module';
+import { CajaModule } from './caja/caja.module';
+import { AdminModule } from './admin/admin.module';
+
+@Module({
+  imports: [DbModule, AuthModule, CatalogoModule, MesasModule, OperacionModule, PrintModule, CajaModule, AdminModule],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
