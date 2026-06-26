@@ -22,6 +22,16 @@ export const categoriaInventarioEnum = pgEnum("categoria_inventario", [
   "multi_insumo", // C
 ]);
 
+// Sub-tipo de carta, aplica solo a categoria C (multi_insumo)
+export const tipoPlatoEnum = pgEnum("tipo_plato", [
+  "entradas",
+  "platos_a_la_carta",
+  "parrillas",
+  "parrillas_familiares",
+  "pastas",
+  "guarniciones",
+]);
+
 // --- Insumos (solo aplica a categorias A y B) ---
 // Para "pollo a la brasa", este es el registro de "pollo_entero",
 // con su stock SIEMPRE expresado en la unidad minima fraccionable
@@ -58,6 +68,8 @@ export const platoCarta = pgTable("plato_carta", {
   // Para A y B tambien existe (ej. se acabaron las gaseosas), pero ahi
   // normalmente lo dispara el propio sistema cuando stock llega a 0.
   disponible: boolean("disponible").notNull().default(true),
+
+  tipoPlato: tipoPlatoEnum("tipo_plato"), // solo para categoria C
 
   activo: boolean("activo").notNull().default(true), // soft-delete del plato (deja de ofrecerse, no se borra historial)
 

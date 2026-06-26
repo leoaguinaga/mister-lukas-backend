@@ -111,6 +111,7 @@ export class CatalogoService {
     nombre: string;
     precio: string;
     categoriaInventario: 'fraccionable' | 'reventa' | 'multi_insumo';
+    tipoPlato?: 'entradas' | 'platos_a_la_carta' | 'parrillas' | 'parrillas_familiares' | 'pastas' | 'guarniciones';
     descripcion?: string;
   }) {
     const [row] = await this.db.insert(schema.platoCarta).values(data).returning();
@@ -122,6 +123,7 @@ export class CatalogoService {
     precio: string;
     descripcion: string;
     categoriaInventario: 'fraccionable' | 'reventa' | 'multi_insumo';
+    tipoPlato: 'entradas' | 'platos_a_la_carta' | 'parrillas' | 'parrillas_familiares' | 'pastas' | 'guarniciones';
     disponible: boolean;
     activo: boolean;
   }>) {

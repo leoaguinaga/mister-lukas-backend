@@ -53,8 +53,8 @@ export class CatalogoController {
   @Post('platos')
   @UseGuards(AuthGuard)
   @Roles('administracion')
-  createPlato(@Body() body: { nombre: string; precio: string; categoriaInventario: 'fraccionable' | 'reventa' | 'multi_insumo'; descripcion?: string }) {
-    return this.catalogo.createPlato(body);
+  createPlato(@Body() body: { nombre: string; precio: string; categoriaInventario: 'fraccionable' | 'reventa' | 'multi_insumo'; tipoPlato?: string; descripcion?: string }) {
+    return this.catalogo.createPlato(body as Parameters<CatalogoService['createPlato']>[0]);
   }
 
   @Patch('platos/:id')

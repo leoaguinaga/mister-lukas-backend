@@ -8,6 +8,13 @@
       "when": 1782238405284,
       "tag": "0000_tiresome_mercury",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782514381961,
+      "tag": "0001_open_moonstone",
+      "breakpoints": true
     }
   ]
 }
