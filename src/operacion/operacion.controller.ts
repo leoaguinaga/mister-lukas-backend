@@ -48,4 +48,9 @@ export class OperacionController {
   cerrarVisita(@Param('id') visitaId: string) {
     return this.operacion.cerrarVisita(visitaId);
   }
+
+  @Post('visits/llevar')
+  abrirVisitaParaLlevar(@Request() req: { user: { id: string } }) {
+    return this.operacion.abrirVisitaParaLlevar(req.user.id);
+  }
 }

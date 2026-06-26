@@ -153,6 +153,7 @@ export class CajaService {
           visitaId: visita.id,
           mesaId: visita.mesaId,
           mesaNumero: mesa?.numero ?? 0,
+          paraLlevar: visita.paraLlevar,
           fechaApertura: visita.fechaApertura,
           total: total.toFixed(2),
           pedidos: pedidosVisita.length,

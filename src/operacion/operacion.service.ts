@@ -90,6 +90,31 @@ export class OperacionService {
     return visita;
   }
 
+  // ─── Pedido para llevar ───────────────────────────────────────────────────
+
+  async abrirVisitaParaLlevar(usuarioId: string) {
+    // Busca o crea una mesa virtual numero=0 reservada para llevar
+    let [mesaLlevar] = await this.db
+      .select()
+      .from(schema.mesa)
+      .where(eq(schema.mesa.numero, 0));
+
+    if (!mesaLlevar) {
+      [mesaLlevar] = await this.db
+        .insert(schema.mesa)
+        .values({ numero: 0, capacidad: null })
+        .returning();
+    }
+
+    // Crea la visita con paraLlevar=true sin tocar el estado de la mesa
+    const [visita] = await this.db
+      .insert(schema.visitaMesa)
+      .values({ mesaId: mesaLlevar.id, abiertaPorUsuarioId: usuarioId, paraLlevar: true })
+      .returning();
+
+    return visita;
+  }
+
   // ─── Abrir mesa ───────────────────────────────────────────────────────────
 
   async abrirMesa(mesaId: string, usuarioId: string) {
@@ -203,13 +228,19 @@ export class OperacionService {
         .values({ visitaMesaId: visitaId, tomadoPorUsuarioId: usuarioId })
         .returning();
 
-      const itemsInsert = items.map((i) => ({
-        pedidoId: pedido.id,
-        platoCartaId: i.platoCartaId,
-        cantidad: i.cantidad,
-        precioUnitarioCongelado: platoMap.get(i.platoCartaId)!.precio,
-        notas: i.notas,
-      }));
+      const itemsInsert = items.map((i) => {
+        const plato = platoMap.get(i.platoCartaId)!;
+        const precioBase = parseFloat(plato.precio);
+        // +S/1 por plato en pedidos para llevar, excepto bebidas (reventa)
+        const recargo = visita.paraLlevar && plato.categoriaInventario !== 'reventa' ? 1 : 0;
+        return {
+          pedidoId: pedido.id,
+          platoCartaId: i.platoCartaId,
+          cantidad: i.cantidad,
+          precioUnitarioCongelado: (precioBase + recargo).toFixed(2),
+          notas: i.notas,
+        };
+      });
 
       const itemsCreados = await tx
         .insert(schema.itemPedido)
@@ -406,10 +437,13 @@ export class OperacionService {
         .where(eq(schema.visitaMesa.id, visitaId))
         .returning();
 
-      await tx
-        .update(schema.mesa)
-        .set({ estado: 'libre', updatedAt: new Date() })
-        .where(eq(schema.mesa.id, visita.mesaId));
+      // La mesa virtual (para llevar, numero=0) siempre queda libre; no cambiar estado
+      if (!visita.paraLlevar) {
+        await tx
+          .update(schema.mesa)
+          .set({ estado: 'libre', updatedAt: new Date() })
+          .where(eq(schema.mesa.id, visita.mesaId));
+      }
 
       return visitaCerrada;
     });

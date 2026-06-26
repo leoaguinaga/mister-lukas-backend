@@ -40,6 +40,7 @@ export const visitaMesa = pgTable("visita_mesa", {
 
   abiertaPorUsuarioId: text("abierta_por_usuario_id").notNull().references(() => user.id), // mesero
   estado: estadoVisitaEnum("estado").notNull().default("abierta"),
+  paraLlevar: boolean("para_llevar").notNull().default(false), // pedido para llevar (+S/1 por plato elegible)
 
   fechaApertura: timestamp("fecha_apertura").notNull().defaultNow(),
   fechaCierre: timestamp("fecha_cierre"), // null mientras este abierta
