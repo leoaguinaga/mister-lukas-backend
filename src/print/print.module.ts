@@ -3,6 +3,7 @@ import { MockPrintService } from './mock-print.service';
 import { RealPrintService } from './real-print.service';
 import { PRINT_SERVICE } from './print.interface';
 import { DevPrintController } from './dev-print.controller';
+import { PrinterManagementService } from './printer-management.service';
 
 const printServiceProvider = {
   provide: PRINT_SERVICE,
@@ -11,7 +12,7 @@ const printServiceProvider = {
 
 @Module({
   controllers: [DevPrintController],
-  providers: [printServiceProvider, MockPrintService, RealPrintService],
-  exports: [PRINT_SERVICE],
+  providers: [printServiceProvider, MockPrintService, RealPrintService, PrinterManagementService],
+  exports: [PRINT_SERVICE, PrinterManagementService],
 })
 export class PrintModule {}

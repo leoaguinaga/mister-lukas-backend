@@ -1,13 +1,17 @@
-import { Controller, Get, Post, Patch, Param, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, UseGuards, Req, BadRequestException } from '@nestjs/common';
 import type { Request } from 'express';
 import { AdminService } from './admin.service';
 import { AuthGuard, Roles } from '../auth/auth.guard';
+import { PrinterManagementService } from '../print/printer-management.service';
 
 @Controller('admin')
 @UseGuards(AuthGuard)
 @Roles('administracion')
 export class AdminController {
-  constructor(private readonly admin: AdminService) {}
+  constructor(
+    private readonly admin: AdminService,
+    private readonly printerMgmt: PrinterManagementService,
+  ) {}
 
   @Get('users')
   listUsuarios() {
@@ -27,6 +31,20 @@ export class AdminController {
     @Body() body: { activo?: boolean; role?: 'mesero' | 'cajero' | 'administracion' },
   ) {
     return this.admin.updateUsuario(id, body);
+  }
+
+  // ─── Ticketeras ────────────────────────────────────────────────────────────
+
+  @Get('ticketeras')
+  getTicketeras() {
+    return this.printerMgmt.getTicketeras();
+  }
+
+  @Post('ticketeras/:tipo/test')
+  async testPrint(@Param('tipo') tipo: string) {
+    if (tipo !== 'cocina' && tipo !== 'recibos') throw new BadRequestException('tipo inválido');
+    await this.printerMgmt.testPrint(tipo as 'cocina' | 'recibos');
+    return { ok: true };
   }
 
   // ─── Stock ─────────────────────────────────────────────────────────────────
