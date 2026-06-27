@@ -3,8 +3,9 @@ import {
   Inject,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
-import { eq, and, inArray, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql, notInArray } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../db/db.module';
 import { PRINT_SERVICE } from '../print/print.interface';
@@ -417,6 +418,155 @@ export class OperacionService {
     }
 
     return updated;
+  }
+
+  // ─── Imprimir cuenta (sin cerrar) ────────────────────────────────────────
+
+  async imprimirCuenta(visitaId: string) {
+    const visita = await this.getVisita(visitaId);
+    if (visita.estado === 'cerrada') throw new BadRequestException('La visita ya está cerrada');
+
+    const [mesa] = await this.db
+      .select()
+      .from(schema.mesa)
+      .where(eq(schema.mesa.id, visita.mesaId));
+
+    const items = visita.pedidos
+      .filter((p) => p.estado !== 'cancelado')
+      .flatMap((p) => p.items);
+
+    const platoIds = [...new Set(items.map((i) => i.platoCartaId))];
+    const platos = platoIds.length
+      ? await this.db.select().from(schema.platoCarta).where(inArray(schema.platoCarta.id, platoIds))
+      : [];
+    const platoMap = new Map(platos.map((p) => [p.id, p]));
+
+    const resumen = new Map<string, { nombre: string; cantidad: number; precioUnitario: string; descuentoUnitario: string }>();
+    for (const item of items) {
+      const key = `${item.platoCartaId}::${item.descuentoUnitario}`;
+      if (resumen.has(key)) {
+        resumen.get(key)!.cantidad += item.cantidad;
+      } else {
+        resumen.set(key, {
+          nombre: platoMap.get(item.platoCartaId)?.nombre ?? item.platoCartaId,
+          cantidad: item.cantidad,
+          precioUnitario: item.precioUnitarioCongelado,
+          descuentoUnitario: item.descuentoUnitario ?? '0.00',
+        });
+      }
+    }
+
+    this.printer.printReceipt({
+      visitaId,
+      mesaNumero: mesa?.numero ?? 0,
+      items: Array.from(resumen.values()),
+      total: visita.total,
+      descuentoTotal: '0.00',
+      metodoPago: 'pendiente',
+      fechaPago: new Date(),
+    }).catch(() => {});
+
+    return { ok: true };
+  }
+
+  // ─── Cobrar desde mesero (busca turno de caja abierto) ───────────────────
+
+  async registrarPagoMesero(
+    usuarioId: string,
+    visitaId: string,
+    pagos: Array<{ metodoPago: 'efectivo' | 'tarjeta' | 'yape_plin' | 'transferencia'; monto: number }>,
+  ) {
+    if (!pagos.length) throw new BadRequestException('Debe incluir al menos un método de pago');
+
+    // Buscar cualquier turno de caja abierto
+    const [turno] = await this.db
+      .select()
+      .from(schema.turnoCaja)
+      .where(eq(schema.turnoCaja.estado, 'abierto'));
+
+    if (!turno) throw new BadRequestException('No hay turno de caja abierto. Pide al cajero que abra el turno.');
+
+    const [pagoExistente] = await this.db
+      .select()
+      .from(schema.pago)
+      .where(eq(schema.pago.visitaMesaId, visitaId));
+    if (pagoExistente) throw new ConflictException('Esta visita ya fue cobrada');
+
+    const visita = await this.getVisita(visitaId);
+    if (visita.estado === 'cerrada') throw new BadRequestException('La visita ya está cerrada');
+
+    const totalEsperado = parseFloat(visita.total);
+    const totalRecibido = pagos.reduce((s, p) => s + p.monto, 0);
+    if (Math.abs(totalRecibido - totalEsperado) > 0.01) {
+      throw new BadRequestException(
+        `La suma de pagos (S/${totalRecibido.toFixed(2)}) no coincide con el total (S/${visita.total})`,
+      );
+    }
+
+    const [mesa] = await this.db
+      .select()
+      .from(schema.mesa)
+      .where(eq(schema.mesa.id, visita.mesaId));
+
+    const items = visita.pedidos
+      .filter((p) => p.estado !== 'cancelado')
+      .flatMap((p) => p.items);
+
+    const platoIds = [...new Set(items.map((i) => i.platoCartaId))];
+    const platos = platoIds.length
+      ? await this.db.select().from(schema.platoCarta).where(inArray(schema.platoCarta.id, platoIds))
+      : [];
+    const platoMap = new Map(platos.map((p) => [p.id, p]));
+
+    const resumen = new Map<string, { nombre: string; cantidad: number; precioUnitario: string; descuentoUnitario: string }>();
+    for (const item of items) {
+      const key = `${item.platoCartaId}::${item.descuentoUnitario}`;
+      if (resumen.has(key)) {
+        resumen.get(key)!.cantidad += item.cantidad;
+      } else {
+        resumen.set(key, {
+          nombre: platoMap.get(item.platoCartaId)?.nombre ?? item.platoCartaId,
+          cantidad: item.cantidad,
+          precioUnitario: item.precioUnitarioCongelado,
+          descuentoUnitario: item.descuentoUnitario ?? '0.00',
+        });
+      }
+    }
+
+    await this.db.insert(schema.pago).values(
+      pagos.map((p) => ({
+        turnoCajaId: turno.id,
+        visitaMesaId: visitaId,
+        registradoPorUsuarioId: usuarioId,
+        metodoPago: p.metodoPago,
+        montoTotal: p.monto.toFixed(2),
+      })),
+    );
+
+    await this.db
+      .update(schema.visitaMesa)
+      .set({ estado: 'cerrada', fechaCierre: new Date() })
+      .where(eq(schema.visitaMesa.id, visitaId));
+
+    if (!visita.paraLlevar) {
+      await this.db
+        .update(schema.mesa)
+        .set({ estado: 'libre', updatedAt: new Date() })
+        .where(eq(schema.mesa.id, visita.mesaId));
+    }
+
+    const metodosLabel = pagos.map((p) => p.metodoPago.replace('_', '/')).join(' + ');
+    this.printer.printReceipt({
+      visitaId,
+      mesaNumero: mesa?.numero ?? 0,
+      items: Array.from(resumen.values()),
+      total: visita.total,
+      descuentoTotal: '0.00',
+      metodoPago: metodosLabel,
+      fechaPago: new Date(),
+    }).catch(() => {});
+
+    return { ok: true };
   }
 
   // ─── Cerrar visita ────────────────────────────────────────────────────────
