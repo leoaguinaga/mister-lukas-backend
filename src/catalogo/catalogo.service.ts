@@ -111,23 +111,27 @@ export class CatalogoService {
     nombre: string;
     precio: string;
     categoriaInventario: 'fraccionable' | 'reventa' | 'multi_insumo';
-    tipoPlato?: 'entradas' | 'platos_a_la_carta' | 'parrillas' | 'parrillas_familiares' | 'pastas' | 'guarniciones';
+    tipoPlato?: typeof schema.tipoPlatoEnum.enumValues[number] | null;
     descripcion?: string;
   }) {
     const [row] = await this.db.insert(schema.platoCarta).values(data).returning();
     return row;
   }
 
-  async updatePlato(id: string, data: Partial<{
-    nombre: string;
-    precio: string;
-    descripcion: string;
-    categoriaInventario: 'fraccionable' | 'reventa' | 'multi_insumo';
-    tipoPlato: 'entradas' | 'platos_a_la_carta' | 'parrillas' | 'parrillas_familiares' | 'pastas' | 'guarniciones';
-    disponible: boolean;
-    activo: boolean;
-  }>) {
-    const [row] = await this.db.update(schema.platoCarta).set(data).where(eq(schema.platoCarta.id, id)).returning();
+  async updatePlato(id: string, data: {
+    nombre?: string;
+    precio?: string;
+    descripcion?: string;
+    categoriaInventario?: 'fraccionable' | 'reventa' | 'multi_insumo';
+    tipoPlato?: typeof schema.tipoPlatoEnum.enumValues[number] | null;
+    disponible?: boolean;
+    activo?: boolean;
+  }) {
+    const [row] = await this.db
+      .update(schema.platoCarta)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.platoCarta.id, id))
+      .returning();
     if (!row) throw new NotFoundException('Plato no encontrado');
     return row;
   }

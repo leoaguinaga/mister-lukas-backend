@@ -9,6 +9,7 @@ import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../db/db.module';
 import { PRINT_SERVICE } from '../print/print.interface';
 import type { PrintService } from '../print/print.interface';
+import { PromocionesService } from '../promociones/promociones.service';
 import * as schema from '../db/schema';
 
 @Injectable()
@@ -16,6 +17,7 @@ export class OperacionService {
   constructor(
     @Inject(DRIZZLE) private db: NodePgDatabase<typeof schema>,
     @Inject(PRINT_SERVICE) private printer: PrintService,
+    private promociones: PromocionesService,
   ) {}
 
   // ─── Monitor: rondas pendientes de todas las mesas ───────────────────────
@@ -222,6 +224,11 @@ export class OperacionService {
       .from(schema.user)
       .where(eq(schema.user.id, usuarioId));
 
+    // Resolver promociones vigentes una sola vez, fuera de la transacción.
+    const promosPorPlato = await this.promociones.resolverPromocionesVigentes(
+      items.map((i) => i.platoCartaId),
+    );
+
     const resultado = await this.db.transaction(async (tx) => {
       const [pedido] = await tx
         .insert(schema.pedido)
@@ -233,11 +240,20 @@ export class OperacionService {
         const precioBase = parseFloat(plato.precio);
         // +S/1 por plato en pedidos para llevar, excepto bebidas (reventa)
         const recargo = visita.paraLlevar && plato.categoriaInventario !== 'reventa' ? 1 : 0;
+        const precioConRecargo = precioBase + recargo;
+
+        const promo = promosPorPlato.get(i.platoCartaId);
+        const descuentoUnitario = promo
+          ? this.promociones.calcularDescuentoUnitario(precioConRecargo, promo)
+          : 0;
+
         return {
           pedidoId: pedido.id,
           platoCartaId: i.platoCartaId,
           cantidad: i.cantidad,
-          precioUnitarioCongelado: (precioBase + recargo).toFixed(2),
+          precioUnitarioCongelado: (precioConRecargo - descuentoUnitario).toFixed(2),
+          descuentoUnitario: descuentoUnitario.toFixed(2),
+          promocionAplicadaId: promo?.id ?? null,
           notas: i.notas,
         };
       });
@@ -247,10 +263,11 @@ export class OperacionService {
         .values(itemsInsert)
         .returning();
 
-      // Descontar stock para platos A (fraccionable) y B (reventa)
+      // Descontar stock para fraccionable y reventa/bebida; refresco y coctel no descuentan
       for (const itemCreado of itemsCreados) {
         const plato = platoMap.get(itemCreado.platoCartaId)!;
         if (plato.categoriaInventario === 'multi_insumo') continue;
+        if (plato.categoriaInventario === 'reventa' && plato.tipoPlato !== 'bebida') continue;
 
         const [receta] = await tx
           .select()
@@ -359,6 +376,7 @@ export class OperacionService {
           .from(schema.platoCarta)
           .where(eq(schema.platoCarta.id, item.platoCartaId));
         if (!plato || plato.categoriaInventario === 'multi_insumo') continue;
+        if (plato.categoriaInventario === 'reventa' && plato.tipoPlato !== 'bebida') continue;
 
         const [receta] = await this.db
           .select()

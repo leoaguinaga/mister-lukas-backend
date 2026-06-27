@@ -22,14 +22,19 @@ export const categoriaInventarioEnum = pgEnum("categoria_inventario", [
   "multi_insumo", // C
 ]);
 
-// Sub-tipo de carta, aplica solo a categoria C (multi_insumo)
+// Sub-tipo de carta: aplica a categoria C (multi_insumo) y B (reventa)
 export const tipoPlatoEnum = pgEnum("tipo_plato", [
+  // multi_insumo (platos elaborados, sin descuento automático de stock)
   "entradas",
   "platos_a_la_carta",
   "parrillas",
   "parrillas_familiares",
   "pastas",
   "guarniciones",
+  // reventa (bebidas)
+  "refresco",  // ej. limonada, chicha — sin descuento automático de stock
+  "bebida",    // ej. gaseosas, agua, cervezas — SI descuenta stock (1:1)
+  "coctel",    // tragos preparados — sin descuento automático de stock
 ]);
 
 // --- Insumos (solo aplica a categorias A y B) ---
