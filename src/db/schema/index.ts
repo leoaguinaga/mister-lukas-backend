@@ -3,3 +3,4 @@ export * from './catalogo.schema';
 export * from './operacion.schema';
 export * from './caja.schema';
 export * from './inventario.schema';
+export * from './promociones.schema';

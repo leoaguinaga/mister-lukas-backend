@@ -209,18 +209,24 @@ export class CajaService {
       0,
     );
 
-    // Agrupar items por plato
-    const resumen = new Map<string, { nombre: string; cantidad: number; precioUnitario: string }>();
+    const descuentoTotal = items.reduce(
+      (s, i) => s + parseFloat(i.descuentoUnitario ?? '0') * i.cantidad,
+      0,
+    );
+
+    // Agrupar items por plato (mismo plato + mismo descuento se considera misma línea)
+    const resumen = new Map<string, { nombre: string; cantidad: number; precioUnitario: string; descuentoUnitario: string }>();
     for (const item of items) {
       const plato = platoMap.get(item.platoCartaId);
-      const key = item.platoCartaId;
+      const key = `${item.platoCartaId}::${item.descuentoUnitario}`;
       if (resumen.has(key)) {
         resumen.get(key)!.cantidad += item.cantidad;
       } else {
         resumen.set(key, {
-          nombre: plato?.nombre ?? key,
+          nombre: plato?.nombre ?? item.platoCartaId,
           cantidad: item.cantidad,
           precioUnitario: item.precioUnitarioCongelado,
+          descuentoUnitario: item.descuentoUnitario ?? '0.00',
         });
       }
     }
@@ -231,6 +237,7 @@ export class CajaService {
       fechaApertura: visita.fechaApertura,
       resumen: Array.from(resumen.values()),
       total: total.toFixed(2),
+      descuentoTotal: descuentoTotal.toFixed(2),
     };
   }
 

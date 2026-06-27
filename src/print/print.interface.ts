@@ -18,8 +18,10 @@ export interface ReceiptData {
     nombre: string;
     cantidad: number;
     precioUnitario: string;
+    descuentoUnitario?: string;
   }>;
   total: string;
+  descuentoTotal?: string;
   metodoPago: string;
   fechaPago: Date;
 }

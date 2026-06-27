@@ -46,11 +46,20 @@ export class MockPrintService implements PrintService {
   async printReceipt(data: ReceiptData): Promise<void> {
     ensureDir();
 
-    const itemLines = data.items.map((i) => {
+    const itemLines = data.items.flatMap((i) => {
       const subtotal = (parseFloat(i.precioUnitario) * i.cantidad).toFixed(2);
       const nombre = i.nombre.length > 20 ? i.nombre.slice(0, 19) + '…' : i.nombre;
-      return `${i.cantidad}x ${nombre.padEnd(22)} S/${subtotal}`;
+      const linea = `${i.cantidad}x ${nombre.padEnd(22)} S/${subtotal}`;
+      const descU = parseFloat(i.descuentoUnitario ?? '0');
+      if (descU > 0) {
+        const totalDesc = (descU * i.cantidad).toFixed(2);
+        return [linea, `     ↳ Promo (-S/${totalDesc})`];
+      }
+      return [linea];
     });
+
+    const tieneDescuento = parseFloat(data.descuentoTotal ?? '0') > 0;
+    const subtotalBruto = (parseFloat(data.total) + parseFloat(data.descuentoTotal ?? '0')).toFixed(2);
 
     const lineas = [
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
@@ -62,6 +71,12 @@ export class MockPrintService implements PrintService {
       '─────────────────────────────────',
       ...itemLines,
       '─────────────────────────────────',
+      ...(tieneDescuento
+        ? [
+            `Subtotal:                  S/${subtotalBruto.padStart(6)}`,
+            `Descuento:                -S/${data.descuentoTotal!.padStart(6)}`,
+          ]
+        : []),
       `TOTAL:                     S/${data.total.padStart(6)}`,
       `Método:  ${data.metodoPago}`,
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',

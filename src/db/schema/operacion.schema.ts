@@ -1,6 +1,7 @@
-import { pgTable, text, integer, boolean, timestamp, uuid, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, uuid, pgEnum, AnyPgColumn } from "drizzle-orm/pg-core";
 import { user } from "./auth.schema";
 import { platoCarta } from "./catalogo.schema";
+import { promocion } from "./promociones.schema";
 
 /**
  * OPERACION
@@ -85,6 +86,13 @@ export const itemPedido = pgTable("item_pedido", {
   // Precio del plato AL MOMENTO de pedirlo. Se copia desde plato_carta.precio
   // para que si el precio de la carta cambia despues, el historico no se altere.
   precioUnitarioCongelado: text("precio_unitario_congelado").notNull(),
+
+  // Descuento aplicado al precio unitario por una promoción vigente al momento
+  // del pedido. Se guarda como monto absoluto en soles por unidad (no porcentaje),
+  // así el recibo y los reportes pueden mostrarlo sin recomputar.
+  // El precioUnitarioCongelado YA incluye este descuento restado.
+  descuentoUnitario: text("descuento_unitario").notNull().default("0.00"),
+  promocionAplicadaId: uuid("promocion_aplicada_id").references((): AnyPgColumn => promocion.id, { onDelete: "set null" }),
 
   // Personalizacion en texto libre: "sin crema", "sin aji", "sin arroz", etc.
   // No se modela como opciones estructuradas de la carta -- es una nota

@@ -81,11 +81,20 @@ export class RealPrintService implements PrintService {
     const ESC = '\x1b'; const GS = '\x1d'; const LF = '\x0a';
     const fecha = data.fechaPago.toLocaleString('es-PE', { timeZone: 'America/Lima', hour12: false });
 
-    const itemLines = data.items.map((i) => {
+    const itemLines = data.items.flatMap((i) => {
       const subtotal = (parseFloat(i.precioUnitario) * i.cantidad).toFixed(2);
       const nombre   = i.nombre.length > 20 ? i.nombre.slice(0, 19) + '.' : i.nombre;
-      return `${i.cantidad}x ${nombre.padEnd(22)} S/${subtotal}${LF}`;
+      const linea    = `${i.cantidad}x ${nombre.padEnd(22)} S/${subtotal}${LF}`;
+      const descU    = parseFloat(i.descuentoUnitario ?? '0');
+      if (descU > 0) {
+        const totalDesc = (descU * i.cantidad).toFixed(2);
+        return [linea, `   Promo (-S/${totalDesc})${LF}`];
+      }
+      return [linea];
     });
+
+    const tieneDescuento = parseFloat(data.descuentoTotal ?? '0') > 0;
+    const subtotalBruto  = (parseFloat(data.total) + parseFloat(data.descuentoTotal ?? '0')).toFixed(2);
 
     const parts = [
       `${ESC}\x40`,
@@ -99,6 +108,12 @@ export class RealPrintService implements PrintService {
       `--------------------------------${LF}`,
       ...itemLines,
       `--------------------------------${LF}`,
+      ...(tieneDescuento
+        ? [
+            `Subtotal:           S/${subtotalBruto.padStart(6)}${LF}`,
+            `Descuento:         -S/${data.descuentoTotal!.padStart(6)}${LF}`,
+          ]
+        : []),
       `TOTAL:              S/${data.total.padStart(6)}${LF}`,
       `Metodo: ${data.metodoPago}${LF}`,
       `--------------------------------${LF}`,

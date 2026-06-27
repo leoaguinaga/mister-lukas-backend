@@ -9,9 +9,10 @@ import { OperacionModule } from './operacion/operacion.module';
 import { PrintModule } from './print/print.module';
 import { CajaModule } from './caja/caja.module';
 import { AdminModule } from './admin/admin.module';
+import { PromocionesModule } from './promociones/promociones.module';
 
 @Module({
-  imports: [DbModule, AuthModule, CatalogoModule, MesasModule, OperacionModule, PrintModule, CajaModule, AdminModule],
+  imports: [DbModule, AuthModule, CatalogoModule, MesasModule, OperacionModule, PrintModule, CajaModule, AdminModule, PromocionesModule],
   controllers: [AppController],
   providers: [AppService],
 })
