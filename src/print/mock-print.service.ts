@@ -20,15 +20,25 @@ export class MockPrintService implements PrintService {
   async printKitchenTicket(data: KitchenTicketData): Promise<void> {
     ensureDir();
 
+    const codigoRonda = `R-${String(data.numeroCorto).padStart(4, '0')}`;
     const lineas = [
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       '          MISTER LUKA             ',
       '          ** COCINA **            ',
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+      `         ${codigoRonda}`,
+      `         ═════════`,
+      ...(data.paraLlevar
+        ? [
+            '',
+            '   >>> PARA LLEVAR <<<',
+            `   Cliente: ${data.nombreClienteLlevar ?? '—'}`,
+            '',
+          ]
+        : []),
       `Mesa:    ${data.mesaNumero}`,
       `Mesero:  ${data.mesero}`,
       `Hora:    ${formatDate(data.fechaCreacion)}`,
-      `ID:      ${data.pedidoId.slice(0, 8)}`,
       '─────────────────────────────────',
       ...data.items.map((item) =>
         [`${item.cantidad}x  ${item.nombre}`, item.notas ? `     → ${item.notas}` : '']
@@ -59,33 +69,72 @@ export class MockPrintService implements PrintService {
     });
 
     const tieneDescuento = parseFloat(data.descuentoTotal ?? '0') > 0;
-    const subtotalBruto = (parseFloat(data.total) + parseFloat(data.descuentoTotal ?? '0')).toFixed(2);
+    const costoEnvio = parseFloat(data.costoEnvio ?? '0');
+    const tieneEnvio = costoEnvio > 0.005;
+    const ajusteMonto = parseFloat(data.ajusteMonto ?? '0');
+    const tieneAjuste = Math.abs(ajusteMonto) > 0.005;
+
+    const totalItemsNeto = parseFloat(data.total) - costoEnvio;
+    const totalItemsBruto = totalItemsNeto + parseFloat(data.descuentoTotal ?? '0');
+    const totalFinal = (parseFloat(data.total) + ajusteMonto).toFixed(2);
 
     const lineas = [
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       '          MISTER LUKA             ',
-      '    Pollo a la Brasa & Más        ',
+      data.esPrecuenta ? '       ** PRECUENTA **          ' : '    Pollo a la Brasa & Más        ',
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-      `Mesa:    ${data.mesaNumero}`,
+      ...(data.tipoVisita === 'llevar'
+        ? [
+            `Llevar:  ${data.nombreCliente ?? 'Cliente'}`,
+          ]
+        : data.tipoVisita === 'delivery'
+        ? [
+            `Delivery: ${data.nombreCliente ?? 'Cliente'}`,
+            `Telf:    ${data.telefonoCliente ?? '—'}`,
+            `Dir:     ${data.direccionDelivery ?? '—'}`,
+          ]
+        : [
+            `Mesa:    ${data.mesaNumero}`,
+          ]),
       `Fecha:   ${formatDate(data.fechaPago)}`,
       '─────────────────────────────────',
       ...itemLines,
       '─────────────────────────────────',
+      ...((tieneDescuento || tieneEnvio || tieneAjuste)
+        ? [
+            `Subtotal:                  S/${totalItemsBruto.toFixed(2).padStart(6)}`,
+          ]
+        : []),
       ...(tieneDescuento
         ? [
-            `Subtotal:                  S/${subtotalBruto.padStart(6)}`,
             `Descuento:                -S/${data.descuentoTotal!.padStart(6)}`,
           ]
         : []),
-      `TOTAL:                     S/${data.total.padStart(6)}`,
-      `Método:  ${data.metodoPago}`,
+      ...(tieneEnvio
+        ? [
+            `Costo Envio:               S/${costoEnvio.toFixed(2).padStart(6)}`,
+          ]
+        : []),
+      ...(tieneAjuste
+        ? [
+            `Ajuste${ajusteMonto > 0 ? '   ' : ' '}(${data.motivoAjuste ?? '—'}):`.padEnd(28) +
+              ` ${ajusteMonto > 0 ? '+' : '-'}S/${Math.abs(ajusteMonto).toFixed(2).padStart(6)}`,
+          ]
+        : []),
+      `TOTAL:                     S/${totalFinal.padStart(6)}`,
+      ...(data.esPrecuenta
+        ? ['', '** No es un comprobante de pago **']
+        : [`Método:  ${data.metodoPago}`]),
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-      '        ¡Gracias por venir!       ',
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+      ...(data.esPrecuenta ? [] : ['        ¡Gracias por venir!       ', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━']),
     ];
 
     const contenido = lineas.join('\n');
-    fs.writeFileSync(path.join(TICKETS_DIR, 'last-receipt.txt'), contenido, 'utf8');
-    this.logger.log(`[MOCK] Recibo impreso — Mesa ${data.mesaNumero}, S/${data.total} (${data.metodoPago})`);
+    const filename = data.esPrecuenta ? 'last-precuenta.txt' : 'last-receipt.txt';
+    fs.writeFileSync(path.join(TICKETS_DIR, filename), contenido, 'utf8');
+    this.logger.log(
+      `[MOCK] ${data.esPrecuenta ? 'Precuenta' : 'Recibo'} impreso — Mesa ${data.mesaNumero}, S/${totalFinal}` +
+        (data.esPrecuenta ? '' : ` (${data.metodoPago})`),
+    );
   }
 }

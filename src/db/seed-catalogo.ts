@@ -41,36 +41,48 @@ async function main() {
 
   // ─── Platos de la carta ───────────────────────────────────────────────────
 
-  type CatInv = 'fraccionable' | 'reventa' | 'multi_insumo';
+  type CatProd = typeof schema.categoriaProductoEnum.enumValues[number];
   const platos: Array<{
     nombre: string;
     precio: string;
-    categoriaInventario: CatInv;
+    categoria: CatProd;
     receta?: { insumo: string; cantidad: number };
   }> = [
-    // Pollo a la brasa (fraccionable — stock desde insumo "Pollo entero")
-    { nombre: '1/8 Pollo a la brasa',   precio: '12.00', categoriaInventario: 'fraccionable', receta: { insumo: 'Pollo entero', cantidad: 1 } },
-    { nombre: '1/4 Pollo a la brasa',   precio: '22.00', categoriaInventario: 'fraccionable', receta: { insumo: 'Pollo entero', cantidad: 2 } },
-    { nombre: '1/2 Pollo a la brasa',   precio: '40.00', categoriaInventario: 'fraccionable', receta: { insumo: 'Pollo entero', cantidad: 4 } },
-    { nombre: 'Pollo entero a la brasa',precio: '75.00', categoriaInventario: 'fraccionable', receta: { insumo: 'Pollo entero', cantidad: 8 } },
+    // Pollo a la brasa (se ignora stock/receta para evitar fricción operativa)
+    { nombre: '1/8 Pollo a la brasa',   precio: '12.00', categoria: 'pollo_a_la_brasa' },
+    { nombre: '1/4 Pollo a la brasa',   precio: '22.00', categoria: 'pollo_a_la_brasa' },
+    { nombre: '1/2 Pollo a la brasa',   precio: '40.00', categoria: 'pollo_a_la_brasa' },
+    { nombre: 'Pollo entero a la brasa',precio: '75.00', categoria: 'pollo_a_la_brasa' },
 
-    // Bebidas (reventa — stock 1:1 con el insumo)
-    { nombre: 'Inca Kola 500ml',        precio: '5.00',  categoriaInventario: 'reventa', receta: { insumo: 'Inca Kola 500ml',        cantidad: 1 } },
-    { nombre: 'Coca Cola 500ml',        precio: '5.00',  categoriaInventario: 'reventa', receta: { insumo: 'Coca Cola 500ml',        cantidad: 1 } },
-    { nombre: 'Sprite 500ml',           precio: '5.00',  categoriaInventario: 'reventa', receta: { insumo: 'Sprite 500ml',           cantidad: 1 } },
-    { nombre: 'Inca Kola 1.5L',         precio: '12.00', categoriaInventario: 'reventa', receta: { insumo: 'Inca Kola 1.5L',         cantidad: 1 } },
-    { nombre: 'Coca Cola 1.5L',         precio: '12.00', categoriaInventario: 'reventa', receta: { insumo: 'Coca Cola 1.5L',         cantidad: 1 } },
-    { nombre: 'Agua San Luis 500ml',    precio: '3.00',  categoriaInventario: 'reventa', receta: { insumo: 'Agua San Luis 500ml',    cantidad: 1 } },
-    { nombre: 'Cerveza Cusqueña 620ml', precio: '12.00', categoriaInventario: 'reventa', receta: { insumo: 'Cerveza Cusqueña 620ml', cantidad: 1 } },
-    { nombre: 'Cerveza Pilsen 620ml',   precio: '10.00', categoriaInventario: 'reventa', receta: { insumo: 'Cerveza Pilsen 620ml',   cantidad: 1 } },
+    // Bebidas (descontables automáticamente 1:1)
+    { nombre: 'Inca Kola 500ml',        precio: '5.00',  categoria: 'bebidas', receta: { insumo: 'Inca Kola 500ml',        cantidad: 1 } },
+    { nombre: 'Coca Cola 500ml',        precio: '5.00',  categoria: 'bebidas', receta: { insumo: 'Coca Cola 500ml',        cantidad: 1 } },
+    { nombre: 'Sprite 500ml',           precio: '5.00',  categoria: 'bebidas', receta: { insumo: 'Sprite 500ml',           cantidad: 1 } },
+    { nombre: 'Inca Kola 1.5L',         precio: '12.00', categoria: 'bebidas', receta: { insumo: 'Inca Kola 1.5L',         cantidad: 1 } },
+    { nombre: 'Coca Cola 1.5L',         precio: '12.00', categoria: 'bebidas', receta: { insumo: 'Coca Cola 1.5L',         cantidad: 1 } },
+    { nombre: 'Agua San Luis 500ml',    precio: '3.00',  categoria: 'bebidas', receta: { insumo: 'Agua San Luis 500ml',    cantidad: 1 } },
+    { nombre: 'Cerveza Cusqueña 620ml', precio: '12.00', categoria: 'bebidas', receta: { insumo: 'Cerveza Cusqueña 620ml', cantidad: 1 } },
+    { nombre: 'Cerveza Pilsen 620ml',   precio: '10.00', categoria: 'bebidas', receta: { insumo: 'Cerveza Pilsen 620ml',   cantidad: 1 } },
 
-    // Multi-insumo (disponibilidad manual — no se auto-sincroniza)
-    { nombre: 'Lomo saltado',           precio: '35.00', categoriaInventario: 'multi_insumo' },
-    { nombre: 'Arroz chaufa',           precio: '30.00', categoriaInventario: 'multi_insumo' },
-    { nombre: 'Tallarin saltado',       precio: '30.00', categoriaInventario: 'multi_insumo' },
-    { nombre: 'Parrilla familiar',      precio: '90.00', categoriaInventario: 'multi_insumo' },
-    { nombre: 'Ensalada de la casa',    precio: '15.00', categoriaInventario: 'multi_insumo' },
-    { nombre: 'Porción de papas fritas',precio: '10.00', categoriaInventario: 'multi_insumo' },
+    // Refrescos (bebidas preparadas sin descuento automático de stock)
+    { nombre: 'Jarra de Chicha Morada',  precio: '15.00', categoria: 'refrescos_jugos' },
+    { nombre: 'Jarra de Limonada',       precio: '12.00', categoria: 'refrescos_jugos' },
+
+    // Cócteles (bebidas con alcohol preparadas sin descuento automático de stock)
+    { nombre: 'Pisco Sour',              precio: '18.00', categoria: 'cocteles' },
+    { nombre: 'Chilcano de Pisco',       precio: '16.00', categoria: 'cocteles' },
+
+    // Comida / Platos a la carta
+    { nombre: 'Lomo saltado',           precio: '35.00', categoria: 'platos_a_la_carta' },
+    { nombre: 'Arroz chaufa',           precio: '30.00', categoria: 'platos_a_la_carta' },
+    { nombre: 'Tallarin saltado',       precio: '30.00', categoria: 'platos_a_la_carta' },
+    { nombre: 'Parrilla familiar',      precio: '90.00', categoria: 'parrillas_familiares' },
+    { nombre: 'Ensalada de la casa',    precio: '15.00', categoria: 'entradas' },
+    { nombre: 'Porción de papas fritas',precio: '10.00', categoria: 'guarniciones' },
+
+    // Extras: se agregan manualmente al pedido cuando aplican.
+    { nombre: 'Tupper',                 precio: '1.00',  categoria: 'extras' },
+    { nombre: 'Bolsa',                  precio: '0.50',  categoria: 'extras' },
   ];
 
   for (const p of platos) {
@@ -82,7 +94,7 @@ async function main() {
     const [plato] = await db.insert(schema.platoCarta).values({
       nombre: p.nombre,
       precio: p.precio,
-      categoriaInventario: p.categoriaInventario,
+      categoria: p.categoria,
     }).returning();
     console.log(`✓ Plato creado: ${p.nombre} — S/${p.precio}`);
 
@@ -125,7 +137,7 @@ async function main() {
   let conStock = 0;
 
   for (const plato of todosLosPlatos) {
-    if (plato.categoriaInventario === 'multi_insumo') continue;
+    if (plato.categoria !== 'bebidas') continue;
 
     const insumoId = recetaPorPlato.get(plato.id);
     if (!insumoId) continue;

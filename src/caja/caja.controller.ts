@@ -48,8 +48,41 @@ export class CajaController {
   registrarPago(
     @Param('id') visitaId: string,
     @Request() req: { user: { id: string } },
-    @Body() body: { pagos: Array<{ metodoPago: 'efectivo' | 'tarjeta' | 'yape_plin' | 'transferencia'; monto: number }> },
+    @Body() body: {
+      pagos: Array<{ metodoPago: 'efectivo' | 'tarjeta' | 'yape_plin' | 'transferencia'; monto: number }>;
+      ajuste?: { monto: number; motivo: string };
+    },
   ) {
-    return this.caja.registrarPago(req.user.id, visitaId, body.pagos);
+    return this.caja.registrarPago(req.user.id, visitaId, body.pagos, body.ajuste);
+  }
+
+  @Post('visits/:id/print-precuenta')
+  imprimirPrecuenta(@Param('id') visitaId: string) {
+    return this.caja.imprimirPrecuenta(visitaId);
+  }
+
+  @Post('pedidos/llevar')
+  crearPedidoLlevar(
+    @Request() req: { user: { id: string } },
+    @Body() body: {
+      nombreCliente: string;
+      items: Array<{ platoCartaId: string; cantidad: number; notas?: string }>;
+    },
+  ) {
+    return this.caja.crearPedidoLlevar(req.user.id, body);
+  }
+
+  @Post('pedidos/delivery')
+  crearPedidoDelivery(
+    @Request() req: { user: { id: string } },
+    @Body() body: {
+      nombreCliente: string;
+      telefonoCliente?: string;
+      direccionDelivery: string;
+      costoEnvio: number;
+      items: Array<{ platoCartaId: string; cantidad: number; notas?: string }>;
+    },
+  ) {
+    return this.caja.crearPedidoDelivery(req.user.id, body);
   }
 }

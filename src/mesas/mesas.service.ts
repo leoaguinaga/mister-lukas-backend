@@ -23,10 +23,35 @@ export class MesasService {
     return row;
   }
 
-  async update(id: string, data: Partial<{ numero: number; capacidad: number; estado: 'libre' | 'ocupada' }>) {
-    const [row] = await this.db.update(schema.mesa).set(data).where(eq(schema.mesa.id, id)).returning();
+  async update(
+    id: string,
+    data: Partial<{
+      numero: number;
+      capacidad: number;
+      estado: 'libre' | 'ocupada';
+      filaPosicion: number | null;
+      colPosicion: number | null;
+    }>,
+  ) {
+    const [row] = await this.db
+      .update(schema.mesa)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.mesa.id, id))
+      .returning();
     if (!row) throw new NotFoundException('Mesa no encontrada');
     return row;
+  }
+
+  async actualizarLayout(
+    posiciones: Array<{ id: string; filaPosicion: number | null; colPosicion: number | null }>,
+  ) {
+    for (const p of posiciones) {
+      await this.db
+        .update(schema.mesa)
+        .set({ filaPosicion: p.filaPosicion, colPosicion: p.colPosicion, updatedAt: new Date() })
+        .where(eq(schema.mesa.id, p.id));
+    }
+    return { ok: true, actualizadas: posiciones.length };
   }
 
   async delete(id: string) {

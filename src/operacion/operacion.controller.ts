@@ -31,17 +31,29 @@ export class OperacionController {
   crearPedido(
     @Param('id') visitaId: string,
     @Request() req: { user: { id: string } },
-    @Body() body: { items: Array<{ platoCartaId: string; cantidad: number; notas?: string }> },
+    @Body() body: {
+      items: Array<{ platoCartaId: string; cantidad: number; notas?: string }>;
+      paraLlevar?: boolean;
+      nombreClienteLlevar?: string;
+    },
   ) {
-    return this.operacion.crearPedido(visitaId, req.user.id, body.items);
+    return this.operacion.crearPedido(visitaId, req.user.id, body.items, {
+      paraLlevar: body.paraLlevar,
+      nombreClienteLlevar: body.nombreClienteLlevar,
+    });
   }
 
   @Patch('orders/:id/status')
   cambiarEstado(
     @Param('id') pedidoId: string,
-    @Body() body: { estado: 'en_preparacion' | 'listo' | 'entregado' | 'cancelado' },
+    @Body() body: {
+      estado: 'en_preparacion' | 'listo' | 'entregado' | 'cancelado';
+      motivoCancelacion?: string;
+    },
   ) {
-    return this.operacion.cambiarEstadoPedido(pedidoId, body.estado);
+    return this.operacion.cambiarEstadoPedido(pedidoId, body.estado, {
+      motivoCancelacion: body.motivoCancelacion,
+    });
   }
 
   @Post('visits/:id/close')
@@ -50,8 +62,11 @@ export class OperacionController {
   }
 
   @Post('visits/llevar')
-  abrirVisitaParaLlevar(@Request() req: { user: { id: string } }) {
-    return this.operacion.abrirVisitaParaLlevar(req.user.id);
+  abrirVisitaParaLlevar(
+    @Request() req: { user: { id: string } },
+    @Body() body?: { nombreCliente?: string },
+  ) {
+    return this.operacion.abrirVisitaParaLlevar(req.user.id, body?.nombreCliente);
   }
 
   @Post('visits/:id/print-bill')

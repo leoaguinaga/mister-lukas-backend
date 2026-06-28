@@ -2,12 +2,11 @@
           MISTER LUKA             
           ** COCINA **            
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Mesa:    2
+         R-0005
+         ═════════
+Mesa:    0
 Mesero:  Mesero Demo
-Hora:    24/6/2026, 09:01:31
-ID:      e2792cee
+Hora:    28/6/2026, 17:07:32
 ─────────────────────────────────
-2x  1/4 Pollo a la brasa
-     → Sin ají, con pocas papas
-1x  Inca Kola 1.5L
+2x  1/8 Pollo a la brasa
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

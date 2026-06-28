@@ -1,2 +1,0 @@
-CREATE TYPE "public"."tipo_plato" AS ENUM('entradas', 'platos_a_la_carta', 'parrillas', 'parrillas_familiares', 'pastas', 'guarniciones');--> statement-breakpoint
-ALTER TABLE "plato_carta" ADD COLUMN "tipo_plato" "tipo_plato";

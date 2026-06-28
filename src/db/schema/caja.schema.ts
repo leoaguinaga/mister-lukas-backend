@@ -52,5 +52,13 @@ export const pago = pgTable("pago", {
   metodoPago: metodoPagoEnum("metodo_pago").notNull(),
   montoTotal: numeric("monto_total", { precision: 10, scale: 2 }).notNull(),
 
+  // Ajuste manual aplicado al total de la visita por decisión del cajero (ej.
+  // delivery con costo distinto, redondeo, descuento de cortesía). Se guarda
+  // SOLO en la primera fila de pago de la visita (las demás van en NULL) para
+  // tener un registro único auditable de quién ajustó y por qué. Positivo
+  // significa que se cobró más que el total de items; negativo, menos.
+  ajusteMonto: numeric("ajuste_monto", { precision: 10, scale: 2 }),
+  motivoAjuste: text("motivo_ajuste"),
+
   fechaPago: timestamp("fecha_pago").notNull().defaultNow(),
 });

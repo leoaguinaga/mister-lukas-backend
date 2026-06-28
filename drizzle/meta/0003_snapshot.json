@@ -1,6 +1,6 @@
 {
-  "id": "ffd32f4d-609c-4099-b7c6-f5b01139f956",
-  "prevId": "155d8520-0eae-4501-8c48-b9bcdb47a32c",
+  "id": "7ed7dd31-a121-4eaa-af9f-efeeec9b4d24",
+  "prevId": "44930f0a-c500-4d0c-afdc-e2fbc86d3146",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -423,9 +423,9 @@
           "primaryKey": false,
           "notNull": true
         },
-        "categoria_inventario": {
-          "name": "categoria_inventario",
-          "type": "categoria_inventario",
+        "categoria": {
+          "name": "categoria",
+          "type": "categoria_producto",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
@@ -436,13 +436,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
-        },
-        "tipo_plato": {
-          "name": "tipo_plato",
-          "type": "tipo_plato",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
         },
         "activo": {
           "name": "activo",
@@ -743,6 +736,31 @@
           "primaryKey": false,
           "notNull": true
         },
+        "numero_corto": {
+          "name": "numero_corto",
+          "type": "serial",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "para_llevar": {
+          "name": "para_llevar",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "nombre_cliente_llevar": {
+          "name": "nombre_cliente_llevar",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "motivo_cancelacion": {
+          "name": "motivo_cancelacion",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "estado": {
           "name": "estado",
           "type": "estado_pedido",
@@ -934,6 +952,18 @@
           "type": "numeric(10, 2)",
           "primaryKey": false,
           "notNull": true
+        },
+        "ajuste_monto": {
+          "name": "ajuste_monto",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "motivo_ajuste": {
+          "name": "motivo_ajuste",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "fecha_pago": {
           "name": "fecha_pago",
@@ -1489,28 +1519,21 @@
     }
   },
   "enums": {
-    "public.categoria_inventario": {
-      "name": "categoria_inventario",
+    "public.categoria_producto": {
+      "name": "categoria_producto",
       "schema": "public",
       "values": [
-        "fraccionable",
-        "reventa",
-        "multi_insumo"
-      ]
-    },
-    "public.tipo_plato": {
-      "name": "tipo_plato",
-      "schema": "public",
-      "values": [
+        "pollo_a_la_brasa",
         "entradas",
         "platos_a_la_carta",
         "parrillas",
         "parrillas_familiares",
         "pastas",
         "guarniciones",
-        "refresco",
-        "bebida",
-        "coctel"
+        "refrescos_jugos",
+        "bebidas",
+        "cocteles",
+        "extras"
       ]
     },
     "public.estado_item_pedido": {

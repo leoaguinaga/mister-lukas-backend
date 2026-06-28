@@ -1,4 +1,4 @@
-import { pgTable, text, integer, boolean, timestamp, uuid, pgEnum, AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, uuid, pgEnum, serial, AnyPgColumn, numeric } from "drizzle-orm/pg-core";
 import { user } from "./auth.schema";
 import { platoCarta } from "./catalogo.schema";
 import { promocion } from "./promociones.schema";
@@ -26,6 +26,12 @@ export const mesa = pgTable("mesa", {
   estado: estadoMesaEnum("estado").notNull().default("libre"),
   capacidad: integer("capacidad"), // opcional, num. de personas
 
+  // Posición en la grilla del salón. Si ambas son null se asume "sin posición":
+  // el frontend del mesero las apila al final como antes. La grilla es densa
+  // pero acepta huecos vacíos (filas/columnas faltantes).
+  filaPosicion: integer("fila_posicion"),
+  colPosicion: integer("col_posicion"),
+
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -34,14 +40,21 @@ export const mesa = pgTable("mesa", {
 // Se abre cuando el mesero marca la mesa como ocupada (paso 1 del flujo).
 // Se cierra cuando caja libera la mesa (paso 9 del flujo).
 export const estadoVisitaEnum = pgEnum("estado_visita", ["abierta", "cerrada"]);
+export const tipoVisitaEnum = pgEnum("tipo_visita", ["mesa", "llevar", "delivery"]);
 
 export const visitaMesa = pgTable("visita_mesa", {
   id: uuid("id").primaryKey().defaultRandom(),
-  mesaId: uuid("mesa_id").notNull().references(() => mesa.id, { onDelete: "restrict" }),
+  mesaId: uuid("mesa_id").references(() => mesa.id, { onDelete: "restrict" }),
 
-  abiertaPorUsuarioId: text("abierta_por_usuario_id").notNull().references(() => user.id), // mesero
+  abiertaPorUsuarioId: text("abierta_por_usuario_id").notNull().references(() => user.id), // mesero/cajero
   estado: estadoVisitaEnum("estado").notNull().default("abierta"),
-  paraLlevar: boolean("para_llevar").notNull().default(false), // pedido para llevar (+S/1 por plato elegible)
+  tipo: tipoVisitaEnum("tipo").notNull().default("mesa"),
+  paraLlevar: boolean("para_llevar").notNull().default(false), // para llevar (+S/1 por plato elegible - obsoleto/removido recargo automático)
+
+  nombreCliente: text("nombre_cliente"),
+  telefonoCliente: text("telefono_cliente"),
+  direccionDelivery: text("direccion_delivery"),
+  costoEnvio: numeric("costo_envio", { precision: 10, scale: 2 }),
 
   fechaApertura: timestamp("fecha_apertura").notNull().defaultNow(),
   fechaCierre: timestamp("fecha_cierre"), // null mientras este abierta
@@ -60,6 +73,21 @@ export const pedido = pgTable("pedido", {
   id: uuid("id").primaryKey().defaultRandom(),
   visitaMesaId: uuid("visita_mesa_id").notNull().references(() => visitaMesa.id, { onDelete: "restrict" }),
   tomadoPorUsuarioId: text("tomado_por_usuario_id").notNull().references(() => user.id), // mesero
+
+  // Correlativo legible para trazar la ronda entre mesa y cocina ("R-0428").
+  // Se asigna automáticamente con un sequence global, sin reset diario.
+  numeroCorto: serial("numero_corto").notNull(),
+
+  // Marca de "para llevar" a nivel de RONDA (no de visita): el cliente puede
+  // estar comiendo en mesa y pedir solo una parte en tupper. La cocina lo lee
+  // del ticket para saber cómo emplatar; el cobro del tupper se hace agregando
+  // el producto "Tupper" manualmente (no hay recargo automático).
+  paraLlevar: boolean("para_llevar").notNull().default(false),
+  nombreClienteLlevar: text("nombre_cliente_llevar"),
+
+  // Motivo de cancelación (obligatorio si estado='cancelado'). Texto libre, pero
+  // el UI ofrece chips con motivos comunes ("demoró mucho", "ya no quiere"...).
+  motivoCancelacion: text("motivo_cancelacion"),
 
   estado: estadoPedidoEnum("estado").notNull().default("pendiente"),
 

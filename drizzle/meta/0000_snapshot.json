@@ -1,5 +1,5 @@
 {
-  "id": "2e1241c6-1dee-4b70-81cc-217c30070c94",
+  "id": "076e20ab-d6e8-45b7-bc9d-179e80d3f7a8",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -423,9 +423,9 @@
           "primaryKey": false,
           "notNull": true
         },
-        "categoria_inventario": {
-          "name": "categoria_inventario",
-          "type": "categoria_inventario",
+        "categoria": {
+          "name": "categoria",
+          "type": "categoria_producto",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
@@ -568,6 +568,19 @@
           "primaryKey": false,
           "notNull": true
         },
+        "descuento_unitario": {
+          "name": "descuento_unitario",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0.00'"
+        },
+        "promocion_aplicada_id": {
+          "name": "promocion_aplicada_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "notas": {
           "name": "notas",
           "type": "text",
@@ -616,6 +629,19 @@
             "id"
           ],
           "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "item_pedido_promocion_aplicada_id_promocion_id_fk": {
+          "name": "item_pedido_promocion_aplicada_id_promocion_id_fk",
+          "tableFrom": "item_pedido",
+          "tableTo": "promocion",
+          "columnsFrom": [
+            "promocion_aplicada_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -803,6 +829,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'abierta'"
+        },
+        "para_llevar": {
+          "name": "para_llevar",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "fecha_apertura": {
           "name": "fecha_apertura",
@@ -1290,16 +1323,179 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
+    },
+    "public.promocion": {
+      "name": "promocion",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "descripcion": {
+          "name": "descripcion",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tipo_descuento": {
+          "name": "tipo_descuento",
+          "type": "tipo_descuento",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "valor_descuento": {
+          "name": "valor_descuento",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dias_semana": {
+          "name": "dias_semana",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hora_inicio": {
+          "name": "hora_inicio",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hora_fin": {
+          "name": "hora_fin",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "vigente_desde": {
+          "name": "vigente_desde",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "vigente_hasta": {
+          "name": "vigente_hasta",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activo": {
+          "name": "activo",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.promocion_plato": {
+      "name": "promocion_plato",
+      "schema": "",
+      "columns": {
+        "promocion_id": {
+          "name": "promocion_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plato_carta_id": {
+          "name": "plato_carta_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "promocion_plato_promocion_id_promocion_id_fk": {
+          "name": "promocion_plato_promocion_id_promocion_id_fk",
+          "tableFrom": "promocion_plato",
+          "tableTo": "promocion",
+          "columnsFrom": [
+            "promocion_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "promocion_plato_plato_carta_id_plato_carta_id_fk": {
+          "name": "promocion_plato_plato_carta_id_plato_carta_id_fk",
+          "tableFrom": "promocion_plato",
+          "tableTo": "plato_carta",
+          "columnsFrom": [
+            "plato_carta_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "promocion_plato_promocion_id_plato_carta_id_pk": {
+          "name": "promocion_plato_promocion_id_plato_carta_id_pk",
+          "columns": [
+            "promocion_id",
+            "plato_carta_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     }
   },
   "enums": {
-    "public.categoria_inventario": {
-      "name": "categoria_inventario",
+    "public.categoria_producto": {
+      "name": "categoria_producto",
       "schema": "public",
       "values": [
-        "fraccionable",
-        "reventa",
-        "multi_insumo"
+        "pollo_a_la_brasa",
+        "entradas",
+        "platos_a_la_carta",
+        "parrillas",
+        "parrillas_familiares",
+        "pastas",
+        "guarniciones",
+        "refrescos_jugos",
+        "bebidas",
+        "cocteles"
       ]
     },
     "public.estado_item_pedido": {
@@ -1373,6 +1569,14 @@
         "venta",
         "ajuste_manual",
         "apertura_dia"
+      ]
+    },
+    "public.tipo_descuento": {
+      "name": "tipo_descuento",
+      "schema": "public",
+      "values": [
+        "porcentaje",
+        "monto_fijo"
       ]
     }
   },

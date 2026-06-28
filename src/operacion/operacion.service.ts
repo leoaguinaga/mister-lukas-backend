@@ -59,7 +59,7 @@ export class OperacionService {
 
     return pedidos.map((p) => {
       const visita = visitaMap.get(p.visitaMesaId)!;
-      const mesa = mesaMap.get(visita.mesaId);
+      const mesa = visita.mesaId ? mesaMap.get(visita.mesaId) : null;
       const minutosEspera = Math.floor(
         (Date.now() - new Date(p.fechaCreacion).getTime()) / 60000,
       );
@@ -95,7 +95,7 @@ export class OperacionService {
 
   // ─── Pedido para llevar ───────────────────────────────────────────────────
 
-  async abrirVisitaParaLlevar(usuarioId: string) {
+  async abrirVisitaParaLlevar(usuarioId: string, nombreCliente?: string) {
     // Busca o crea una mesa virtual numero=0 reservada para llevar
     let [mesaLlevar] = await this.db
       .select()
@@ -112,7 +112,13 @@ export class OperacionService {
     // Crea la visita con paraLlevar=true sin tocar el estado de la mesa
     const [visita] = await this.db
       .insert(schema.visitaMesa)
-      .values({ mesaId: mesaLlevar.id, abiertaPorUsuarioId: usuarioId, paraLlevar: true })
+      .values({
+        mesaId: mesaLlevar.id,
+        abiertaPorUsuarioId: usuarioId,
+        paraLlevar: true,
+        tipo: 'llevar',
+        nombreCliente: nombreCliente || null,
+      })
       .returning();
 
     return visita;
@@ -189,7 +195,14 @@ export class OperacionService {
     visitaId: string,
     usuarioId: string,
     items: Array<{ platoCartaId: string; cantidad: number; notas?: string }>,
+    opciones: { paraLlevar?: boolean; nombreClienteLlevar?: string } = {},
   ) {
+    const paraLlevar = !!opciones.paraLlevar;
+    const nombreClienteLlevar = opciones.nombreClienteLlevar?.trim() ?? '';
+    if (paraLlevar && !nombreClienteLlevar) {
+      throw new BadRequestException('Se requiere el nombre del cliente para un pedido para llevar');
+    }
+
     const [visita] = await this.db
       .select()
       .from(schema.visitaMesa)
@@ -215,10 +228,12 @@ export class OperacionService {
     }
 
     // Obtener datos de mesa y mesero para el ticket
-    const [mesa] = await this.db
-      .select()
-      .from(schema.mesa)
-      .where(eq(schema.mesa.id, visita.mesaId));
+    const [mesa] = visita.mesaId
+      ? await this.db
+          .select()
+          .from(schema.mesa)
+          .where(eq(schema.mesa.id, visita.mesaId))
+      : [null];
 
     const [mesero] = await this.db
       .select()
@@ -233,26 +248,40 @@ export class OperacionService {
     const resultado = await this.db.transaction(async (tx) => {
       const [pedido] = await tx
         .insert(schema.pedido)
-        .values({ visitaMesaId: visitaId, tomadoPorUsuarioId: usuarioId })
+        .values({
+          visitaMesaId: visitaId,
+          tomadoPorUsuarioId: usuarioId,
+          paraLlevar,
+          nombreClienteLlevar: paraLlevar ? nombreClienteLlevar : null,
+        })
         .returning();
+
+      if (paraLlevar && nombreClienteLlevar) {
+        await tx
+          .update(schema.visitaMesa)
+          .set({
+            tipo: 'llevar',
+            nombreCliente: nombreClienteLlevar,
+          })
+          .where(eq(schema.visitaMesa.id, visitaId));
+      }
 
       const itemsInsert = items.map((i) => {
         const plato = platoMap.get(i.platoCartaId)!;
         const precioBase = parseFloat(plato.precio);
-        // +S/1 por plato en pedidos para llevar, excepto bebidas (reventa)
-        const recargo = visita.paraLlevar && plato.categoriaInventario !== 'reventa' ? 1 : 0;
-        const precioConRecargo = precioBase + recargo;
+        // El recargo por tupper/bolsa ya no es automático: se cobra agregando
+        // manualmente el producto "Tupper" (categoría 'extras') al pedido.
 
         const promo = promosPorPlato.get(i.platoCartaId);
         const descuentoUnitario = promo
-          ? this.promociones.calcularDescuentoUnitario(precioConRecargo, promo)
+          ? this.promociones.calcularDescuentoUnitario(precioBase, promo)
           : 0;
 
         return {
           pedidoId: pedido.id,
           platoCartaId: i.platoCartaId,
           cantidad: i.cantidad,
-          precioUnitarioCongelado: (precioConRecargo - descuentoUnitario).toFixed(2),
+          precioUnitarioCongelado: (precioBase - descuentoUnitario).toFixed(2),
           descuentoUnitario: descuentoUnitario.toFixed(2),
           promocionAplicadaId: promo?.id ?? null,
           notas: i.notas,
@@ -264,11 +293,10 @@ export class OperacionService {
         .values(itemsInsert)
         .returning();
 
-      // Descontar stock para fraccionable y reventa/bebida; refresco y coctel no descuentan
+      // Descontar stock solo para bebidas (las demás categorías no descuentan stock automáticamente)
       for (const itemCreado of itemsCreados) {
         const plato = platoMap.get(itemCreado.platoCartaId)!;
-        if (plato.categoriaInventario === 'multi_insumo') continue;
-        if (plato.categoriaInventario === 'reventa' && plato.tipoPlato !== 'bebida') continue;
+        if (plato.categoria !== 'bebidas') continue;
 
         const [receta] = await tx
           .select()
@@ -283,14 +311,6 @@ export class OperacionService {
           .set({ stockActual: sql`${schema.insumo.stockActual} - ${consumido}`, updatedAt: new Date() })
           .where(eq(schema.insumo.id, receta.insumoId))
           .returning({ id: schema.insumo.id, stockActual: schema.insumo.stockActual });
-
-        await tx.insert(schema.movimientoStock).values({
-          insumoId: receta.insumoId,
-          tipo: 'venta',
-          cantidad: -consumido,
-          itemPedidoId: itemCreado.id,
-          registradoPorUsuarioId: usuarioId,
-        });
 
         // Auto-marcar sin disponible si el insumo llega a 0
         if ((insumoActualizado?.stockActual ?? 0) <= 0) {
@@ -310,19 +330,32 @@ export class OperacionService {
       return { ...pedido, items: itemsCreados };
     });
 
-    // Imprimir comanda (no bloquea si falla)
-    this.printer.printKitchenTicket({
-      pedidoId: resultado.id,
-      visitaId,
-      mesaNumero: mesa?.numero ?? 0,
-      mesero: mesero?.name ?? usuarioId,
-      items: resultado.items.map((i) => ({
-        nombre: platoMap.get(i.platoCartaId)!.nombre,
-        cantidad: i.cantidad,
-        notas: i.notas,
-      })),
-      fechaCreacion: resultado.fechaCreacion,
-    }).catch(() => {/* fallo de impresión no interrumpe la operación */});
+    // Imprimir comanda: solo platos preparados en cocina. Las bebidas, refrescos
+    // y cócteles se sirven directamente desde caja/barra y no necesitan comanda.
+    // Si la ronda es 100% bebidas, no se imprime nada (los items quedan en sistema para cobrar).
+    const CATEGORIAS_NO_COCINA = new Set(['bebidas', 'refrescos_jugos', 'cocteles']);
+    const itemsCocina = resultado.items.filter((i) => {
+      const plato = platoMap.get(i.platoCartaId);
+      return plato && !CATEGORIAS_NO_COCINA.has(plato.categoria);
+    });
+
+    if (itemsCocina.length > 0) {
+      this.printer.printKitchenTicket({
+        pedidoId: resultado.id,
+        numeroCorto: resultado.numeroCorto,
+        visitaId,
+        mesaNumero: mesa?.numero ?? 0,
+        mesero: mesero?.name ?? usuarioId,
+        paraLlevar: resultado.paraLlevar,
+        nombreClienteLlevar: resultado.nombreClienteLlevar ?? undefined,
+        items: itemsCocina.map((i) => ({
+          nombre: platoMap.get(i.platoCartaId)!.nombre,
+          cantidad: i.cantidad,
+          notas: i.notas,
+        })),
+        fechaCreacion: resultado.fechaCreacion,
+      }).catch(() => {/* fallo de impresión no interrumpe la operación */});
+    }
 
     return resultado;
   }
@@ -332,6 +365,7 @@ export class OperacionService {
   async cambiarEstadoPedido(
     pedidoId: string,
     nuevoEstado: 'en_preparacion' | 'listo' | 'entregado' | 'cancelado',
+    opciones: { motivoCancelacion?: string } = {},
   ) {
     const [pedido] = await this.db
       .select()
@@ -354,9 +388,15 @@ export class OperacionService {
       );
     }
 
+    const motivoCancelacion = opciones.motivoCancelacion?.trim();
+    if (nuevoEstado === 'cancelado' && !motivoCancelacion) {
+      throw new BadRequestException('El motivo de cancelación es obligatorio');
+    }
+
     const timestamps: Partial<typeof schema.pedido.$inferInsert> = {};
     if (nuevoEstado === 'listo') timestamps.fechaListo = new Date();
     if (nuevoEstado === 'entregado') timestamps.fechaEntregado = new Date();
+    if (nuevoEstado === 'cancelado') timestamps.motivoCancelacion = motivoCancelacion;
 
     const [updated] = await this.db
       .update(schema.pedido)
@@ -376,8 +416,7 @@ export class OperacionService {
           .select()
           .from(schema.platoCarta)
           .where(eq(schema.platoCarta.id, item.platoCartaId));
-        if (!plato || plato.categoriaInventario === 'multi_insumo') continue;
-        if (plato.categoriaInventario === 'reventa' && plato.tipoPlato !== 'bebida') continue;
+        if (!plato || plato.categoria !== 'bebidas') continue;
 
         const [receta] = await this.db
           .select()
@@ -392,14 +431,6 @@ export class OperacionService {
           .set({ stockActual: sql`${schema.insumo.stockActual} + ${restaurado}`, updatedAt: new Date() })
           .where(eq(schema.insumo.id, receta.insumoId))
           .returning({ stockActual: schema.insumo.stockActual });
-
-        await this.db.insert(schema.movimientoStock).values({
-          insumoId: receta.insumoId,
-          tipo: 'ajuste_manual',
-          cantidad: restaurado,
-          itemPedidoId: item.id,
-          notas: 'Pedido cancelado — stock restaurado',
-        });
 
         // Re-habilitar platos si el insumo volvió a tener stock
         if ((insumoActualizado?.stockActual ?? 0) > 0) {
@@ -426,10 +457,12 @@ export class OperacionService {
     const visita = await this.getVisita(visitaId);
     if (visita.estado === 'cerrada') throw new BadRequestException('La visita ya está cerrada');
 
-    const [mesa] = await this.db
-      .select()
-      .from(schema.mesa)
-      .where(eq(schema.mesa.id, visita.mesaId));
+    const [mesa] = visita.mesaId
+      ? await this.db
+          .select()
+          .from(schema.mesa)
+          .where(eq(schema.mesa.id, visita.mesaId))
+      : [null];
 
     const items = visita.pedidos
       .filter((p) => p.estado !== 'cancelado')
@@ -503,10 +536,12 @@ export class OperacionService {
       );
     }
 
-    const [mesa] = await this.db
-      .select()
-      .from(schema.mesa)
-      .where(eq(schema.mesa.id, visita.mesaId));
+    const [mesa] = visita.mesaId
+      ? await this.db
+          .select()
+          .from(schema.mesa)
+          .where(eq(schema.mesa.id, visita.mesaId))
+      : [null];
 
     const items = visita.pedidos
       .filter((p) => p.estado !== 'cancelado')
@@ -548,7 +583,7 @@ export class OperacionService {
       .set({ estado: 'cerrada', fechaCierre: new Date() })
       .where(eq(schema.visitaMesa.id, visitaId));
 
-    if (!visita.paraLlevar) {
+    if (visita.mesaId) {
       await this.db
         .update(schema.mesa)
         .set({ estado: 'libre', updatedAt: new Date() })
@@ -581,21 +616,43 @@ export class OperacionService {
     if (visita.estado === 'cerrada')
       throw new BadRequestException('La visita ya está cerrada');
 
-    // Verificar que no haya pedidos pendientes o en preparación
-    const pedidosActivos = await this.db
+    // Liberación libre: solo se permite cerrar sin pago si no hay consumo (todos
+    // los pedidos cancelados o sin items). Si hay consumo, debe cobrarse en caja
+    // — el cobro internamente cierra la visita.
+    const pedidosNoCancelados = await this.db
       .select()
       .from(schema.pedido)
       .where(
         and(
           eq(schema.pedido.visitaMesaId, visitaId),
-          inArray(schema.pedido.estado, ['pendiente', 'en_preparacion']),
+          notInArray(schema.pedido.estado, ['cancelado']),
         ),
       );
 
-    if (pedidosActivos.length > 0) {
-      throw new BadRequestException(
-        `Hay ${pedidosActivos.length} pedido(s) pendiente(s) de entregar`,
+    if (pedidosNoCancelados.length > 0) {
+      const ids = pedidosNoCancelados.map((p) => p.id);
+      const items = await this.db
+        .select()
+        .from(schema.itemPedido)
+        .where(inArray(schema.itemPedido.pedidoId, ids));
+
+      const consumoTotal = items.reduce(
+        (s, i) => s + parseFloat(i.precioUnitarioCongelado) * i.cantidad,
+        0,
       );
+
+      if (consumoTotal > 0) {
+        const [pagoExistente] = await this.db
+          .select()
+          .from(schema.pago)
+          .where(eq(schema.pago.visitaMesaId, visitaId));
+
+        if (!pagoExistente) {
+          throw new BadRequestException(
+            'Hay consumo sin cobrar. La mesa debe cobrarse en caja antes de liberarse.',
+          );
+        }
+      }
     }
 
     return this.db.transaction(async (tx) => {
@@ -606,7 +663,7 @@ export class OperacionService {
         .returning();
 
       // La mesa virtual (para llevar, numero=0) siempre queda libre; no cambiar estado
-      if (!visita.paraLlevar) {
+      if (visita.mesaId) {
         await tx
           .update(schema.mesa)
           .set({ estado: 'libre', updatedAt: new Date() })

@@ -5,11 +5,12 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import { eq, and, inArray, notInArray, gte, desc } from 'drizzle-orm';
+import { eq, and, inArray, notInArray, gte, desc, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../db/db.module';
 import { PRINT_SERVICE } from '../print/print.interface';
 import type { PrintService } from '../print/print.interface';
+import { PromocionesService } from '../promociones/promociones.service';
 import * as schema from '../db/schema';
 
 type MetodoPago = 'efectivo' | 'tarjeta' | 'yape_plin' | 'transferencia';
@@ -19,6 +20,7 @@ export class CajaService {
   constructor(
     @Inject(DRIZZLE) private db: NodePgDatabase<typeof schema>,
     @Inject(PRINT_SERVICE) private printer: PrintService,
+    private readonly promociones: PromocionesService,
   ) {}
 
   // ─── Turno activo ─────────────────────────────────────────────────────────
@@ -144,22 +146,39 @@ export class CajaService {
         const itemsVisita = items.filter((i) =>
           pedidosVisita.some((p) => p.id === i.pedidoId),
         );
-        const total = itemsVisita.reduce(
+        const totalItems = itemsVisita.reduce(
           (s, i) => s + parseFloat(i.precioUnitarioCongelado) * i.cantidad,
           0,
         );
-        const mesa = mesaMap.get(visita.mesaId);
+        const costoEnvioVal = (visita.tipo === 'delivery' && visita.costoEnvio)
+          ? parseFloat(visita.costoEnvio)
+          : 0;
+        const total = totalItems + costoEnvioVal;
+
+        const mesa = visita.mesaId ? mesaMap.get(visita.mesaId) : null;
         return {
           visitaId: visita.id,
           mesaId: visita.mesaId,
-          mesaNumero: mesa?.numero ?? 0,
+          mesaNumero: mesa?.numero ?? null,
+          tipo: visita.tipo,
+          nombreCliente: visita.nombreCliente,
+          telefonoCliente: visita.telefonoCliente,
+          direccionDelivery: visita.direccionDelivery,
+          costoEnvio: visita.costoEnvio,
           paraLlevar: visita.paraLlevar,
           fechaApertura: visita.fechaApertura,
           total: total.toFixed(2),
           pedidos: pedidosVisita.length,
         };
       })
-      .sort((a, b) => a.mesaNumero - b.mesaNumero);
+      .sort((a, b) => {
+        if (a.mesaNumero !== null && b.mesaNumero !== null) {
+          return a.mesaNumero - b.mesaNumero;
+        }
+        if (a.mesaNumero !== null) return -1;
+        if (b.mesaNumero !== null) return 1;
+        return new Date(b.fechaApertura).getTime() - new Date(a.fechaApertura).getTime();
+      });
   }
 
   // ─── Detalle de visita para cobrar ────────────────────────────────────────
@@ -199,15 +218,22 @@ export class CajaService {
 
     const platoMap = new Map(platos.map((p) => [p.id, p]));
 
-    const [mesa] = await this.db
-      .select()
-      .from(schema.mesa)
-      .where(eq(schema.mesa.id, visita.mesaId));
+    const [mesa] = visita.mesaId
+      ? await this.db
+          .select()
+          .from(schema.mesa)
+          .where(eq(schema.mesa.id, visita.mesaId))
+      : [null];
 
-    const total = items.reduce(
+    const totalItems = items.reduce(
       (s, i) => s + parseFloat(i.precioUnitarioCongelado) * i.cantidad,
       0,
     );
+
+    const costoEnvioVal = (visita.tipo === 'delivery' && visita.costoEnvio)
+      ? parseFloat(visita.costoEnvio)
+      : 0;
+    const total = totalItems + costoEnvioVal;
 
     const descuentoTotal = items.reduce(
       (s, i) => s + parseFloat(i.descuentoUnitario ?? '0') * i.cantidad,
@@ -233,7 +259,12 @@ export class CajaService {
 
     return {
       visitaId,
-      mesaNumero: mesa?.numero ?? 0,
+      mesaNumero: mesa?.numero ?? null,
+      tipo: visita.tipo,
+      nombreCliente: visita.nombreCliente,
+      telefonoCliente: visita.telefonoCliente,
+      direccionDelivery: visita.direccionDelivery,
+      costoEnvio: visita.costoEnvio,
       fechaApertura: visita.fechaApertura,
       resumen: Array.from(resumen.values()),
       total: total.toFixed(2),
@@ -241,12 +272,47 @@ export class CajaService {
     };
   }
 
-  // ─── Registrar pago (acepta múltiples métodos de pago) ────────────────────
+  // ─── Imprimir precuenta (resumen sin cobrar) ─────────────────────────────
+  // El cajero puede llamar este endpoint las veces que necesite antes del
+  // pago; no marca la visita como cobrada ni hace nada en la BD.
+
+  async imprimirPrecuenta(visitaId: string) {
+    const detalle = await this.getDetalleVisita(visitaId);
+
+    const [pagoExistente] = await this.db
+      .select()
+      .from(schema.pago)
+      .where(eq(schema.pago.visitaMesaId, visitaId));
+    if (pagoExistente) {
+      throw new BadRequestException('Esta visita ya fue cobrada — no se emite precuenta');
+    }
+
+    await this.printer.printReceipt({
+      visitaId,
+      mesaNumero: detalle.mesaNumero ?? 0,
+      tipoVisita: detalle.tipo,
+      nombreCliente: detalle.nombreCliente ?? undefined,
+      telefonoCliente: detalle.telefonoCliente ?? undefined,
+      direccionDelivery: detalle.direccionDelivery ?? undefined,
+      costoEnvio: detalle.costoEnvio ?? undefined,
+      items: detalle.resumen,
+      total: detalle.total,
+      descuentoTotal: detalle.descuentoTotal,
+      esPrecuenta: true,
+      metodoPago: '',
+      fechaPago: new Date(),
+    }).catch(() => {});
+
+    return { ok: true, total: detalle.total };
+  }
+
+  // ─── Registrar pago (acepta múltiples métodos de pago + ajuste opcional) ──
 
   async registrarPago(
     cajeroId: string,
     visitaId: string,
     pagos: Array<{ metodoPago: MetodoPago; monto: number }>,
+    ajuste?: { motivo: string; monto: number },
   ) {
     const turno = await this.getTurnoActivo(cajeroId);
     if (!turno) throw new BadRequestException('No hay turno de caja abierto');
@@ -261,25 +327,44 @@ export class CajaService {
     if (pagoExistente) throw new ConflictException('Esta visita ya fue cobrada');
 
     const detalle = await this.getDetalleVisita(visitaId);
-    const totalEsperado = parseFloat(detalle.total);
-    const totalRecibido = pagos.reduce((s, p) => s + p.monto, 0);
+    const totalItems = parseFloat(detalle.total);
 
+    // Validar ajuste si se proporcionó
+    let ajusteMonto = 0;
+    let motivoAjuste: string | null = null;
+    if (ajuste && Math.abs(ajuste.monto) > 0.005) {
+      ajusteMonto = ajuste.monto;
+      motivoAjuste = (ajuste.motivo ?? '').trim();
+      if (!motivoAjuste) {
+        throw new BadRequestException('El ajuste manual requiere un motivo');
+      }
+    }
+
+    const totalEsperado = totalItems + ajusteMonto;
+    if (totalEsperado < 0) {
+      throw new BadRequestException('El ajuste no puede dejar el total en negativo');
+    }
+
+    const totalRecibido = pagos.reduce((s, p) => s + p.monto, 0);
     if (Math.abs(totalRecibido - totalEsperado) > 0.01) {
       throw new BadRequestException(
-        `La suma de pagos (S/${totalRecibido.toFixed(2)}) no coincide con el total de la visita (S/${detalle.total})`,
+        `La suma de pagos (S/${totalRecibido.toFixed(2)}) no coincide con el total a cobrar (S/${totalEsperado.toFixed(2)})`,
       );
     }
 
-    // Insertar todos los pagos
+    // Insertar todos los pagos. El ajuste solo va en la primera fila para
+    // tener un registro único auditable de la decisión del cajero.
     const nuevosPagos = await this.db
       .insert(schema.pago)
       .values(
-        pagos.map((p) => ({
+        pagos.map((p, idx) => ({
           turnoCajaId: turno.id,
           visitaMesaId: visitaId,
           registradoPorUsuarioId: cajeroId,
           metodoPago: p.metodoPago,
           montoTotal: p.monto.toFixed(2),
+          ajusteMonto: idx === 0 && ajusteMonto !== 0 ? ajusteMonto.toFixed(2) : null,
+          motivoAjuste: idx === 0 ? motivoAjuste : null,
         })),
       )
       .returning();
@@ -295,7 +380,7 @@ export class CajaService {
       .from(schema.visitaMesa)
       .where(eq(schema.visitaMesa.id, visitaId));
 
-    if (visita) {
+    if (visita && visita.mesaId) {
       await this.db
         .update(schema.mesa)
         .set({ estado: 'libre', updatedAt: new Date() })
@@ -308,9 +393,17 @@ export class CajaService {
       .join(' + ');
     this.printer.printReceipt({
       visitaId,
-      mesaNumero: detalle.mesaNumero,
+      mesaNumero: detalle.mesaNumero ?? 0,
+      tipoVisita: detalle.tipo,
+      nombreCliente: detalle.nombreCliente ?? undefined,
+      telefonoCliente: detalle.telefonoCliente ?? undefined,
+      direccionDelivery: detalle.direccionDelivery ?? undefined,
+      costoEnvio: detalle.costoEnvio ?? undefined,
       items: detalle.resumen,
       total: detalle.total,
+      descuentoTotal: detalle.descuentoTotal,
+      ajusteMonto: ajusteMonto !== 0 ? ajusteMonto.toFixed(2) : undefined,
+      motivoAjuste: motivoAjuste ?? undefined,
       metodoPago: metodosLabel,
       fechaPago: new Date(),
     }).catch(() => {});
@@ -397,4 +490,307 @@ export class CajaService {
 
     return turnoCerrado;
   }
+
+  // ─── Crear Pedido Para Llevar desde Caja ─────────────────────────────────
+
+  async crearPedidoLlevar(
+    cajeroId: string,
+    data: {
+      nombreCliente: string;
+      items: Array<{ platoCartaId: string; cantidad: number; notas?: string }>;
+    },
+  ) {
+    const nombreCliente = data.nombreCliente.trim();
+    if (!nombreCliente) {
+      throw new BadRequestException('Se requiere el nombre del cliente');
+    }
+    if (!data.items?.length) {
+      throw new BadRequestException('Debe incluir al menos un plato');
+    }
+
+    // Verificar platos y obtener precios
+    const platoIds = data.items.map((i) => i.platoCartaId);
+    const platos = await this.db
+      .select()
+      .from(schema.platoCarta)
+      .where(inArray(schema.platoCarta.id, platoIds));
+    const platoMap = new Map(platos.map((p) => [p.id, p]));
+
+    for (const item of data.items) {
+      const plato = platoMap.get(item.platoCartaId);
+      if (!plato) throw new NotFoundException(`Plato ${item.platoCartaId} no encontrado`);
+      if (!plato.disponible) throw new BadRequestException(`"${plato.nombre}" no está disponible`);
+    }
+
+    const [cajero] = await this.db
+      .select()
+      .from(schema.user)
+      .where(eq(schema.user.id, cajeroId));
+
+    const promosPorPlato = await this.promociones.resolverPromocionesVigentes(platoIds);
+
+    const resultado = await this.db.transaction(async (tx) => {
+      const [visita] = await tx
+        .insert(schema.visitaMesa)
+        .values({
+          abiertaPorUsuarioId: cajeroId,
+          tipo: 'llevar',
+          paraLlevar: true,
+          nombreCliente,
+        })
+        .returning();
+
+      const [pedido] = await tx
+        .insert(schema.pedido)
+        .values({
+          visitaMesaId: visita.id,
+          tomadoPorUsuarioId: cajeroId,
+          paraLlevar: true,
+          nombreClienteLlevar: nombreCliente,
+        })
+        .returning();
+
+      const itemsInsert = data.items.map((i) => {
+        const plato = platoMap.get(i.platoCartaId)!;
+        const precioBase = parseFloat(plato.precio);
+        const promo = promosPorPlato.get(i.platoCartaId);
+        const descuentoUnitario = promo
+          ? this.promociones.calcularDescuentoUnitario(precioBase, promo)
+          : 0;
+
+        return {
+          pedidoId: pedido.id,
+          platoCartaId: i.platoCartaId,
+          cantidad: i.cantidad,
+          precioUnitarioCongelado: (precioBase - descuentoUnitario).toFixed(2),
+          descuentoUnitario: descuentoUnitario.toFixed(2),
+          promocionAplicadaId: promo?.id ?? null,
+          notas: i.notas,
+        };
+      });
+
+      const itemsCreados = await tx
+        .insert(schema.itemPedido)
+        .values(itemsInsert)
+        .returning();
+
+      // Descontar stock para bebidas
+      for (const itemCreado of itemsCreados) {
+        const plato = platoMap.get(itemCreado.platoCartaId)!;
+        if (plato.categoria !== 'bebidas') continue;
+
+        const [receta] = await tx
+          .select()
+          .from(schema.recetaPlato)
+          .where(eq(schema.recetaPlato.platoCartaId, plato.id));
+        if (!receta) continue;
+
+        const consumido = receta.cantidadConsumida * itemCreado.cantidad;
+
+        const [insumoActualizado] = await tx
+          .update(schema.insumo)
+          .set({ stockActual: sql`${schema.insumo.stockActual} - ${consumido}`, updatedAt: new Date() })
+          .where(eq(schema.insumo.id, receta.insumoId))
+          .returning({ id: schema.insumo.id, stockActual: schema.insumo.stockActual });
+
+        if ((insumoActualizado?.stockActual ?? 0) <= 0) {
+          const afectados = await tx
+            .select({ id: schema.recetaPlato.platoCartaId })
+            .from(schema.recetaPlato)
+            .where(eq(schema.recetaPlato.insumoId, receta.insumoId));
+          if (afectados.length) {
+            await tx
+              .update(schema.platoCarta)
+              .set({ disponible: false, updatedAt: new Date() })
+              .where(inArray(schema.platoCarta.id, afectados.map((r) => r.id)));
+          }
+        }
+      }
+
+      return { visita, pedido, items: itemsCreados };
+    });
+
+    const CATEGORIAS_NO_COCINA = new Set(['bebidas', 'refrescos_jugos', 'cocteles']);
+    const itemsCocina = resultado.items.filter((i) => {
+      const plato = platoMap.get(i.platoCartaId);
+      return plato && !CATEGORIAS_NO_COCINA.has(plato.categoria);
+    });
+
+    if (itemsCocina.length > 0) {
+      this.printer.printKitchenTicket({
+        pedidoId: resultado.pedido.id,
+        numeroCorto: resultado.pedido.numeroCorto,
+        visitaId: resultado.visita.id,
+        mesaNumero: 0,
+        mesero: cajero?.name ?? cajeroId,
+        paraLlevar: true,
+        nombreClienteLlevar: nombreCliente,
+        items: itemsCocina.map((i) => ({
+          nombre: platoMap.get(i.platoCartaId)!.nombre,
+          cantidad: i.cantidad,
+          notas: i.notas,
+        })),
+        fechaCreacion: resultado.pedido.fechaCreacion,
+      }).catch(() => {});
+    }
+
+    return { ok: true, visitaId: resultado.visita.id };
+  }
+
+  // ─── Crear Pedido Delivery desde Caja ────────────────────────────────────
+
+  async crearPedidoDelivery(
+    cajeroId: string,
+    data: {
+      nombreCliente: string;
+      telefonoCliente?: string;
+      direccionDelivery: string;
+      costoEnvio: number;
+      items: Array<{ platoCartaId: string; cantidad: number; notas?: string }>;
+    },
+  ) {
+    const nombreCliente = data.nombreCliente.trim();
+    const direccionDelivery = data.direccionDelivery.trim();
+    if (!nombreCliente) {
+      throw new BadRequestException('Se requiere el nombre del cliente');
+    }
+    if (!direccionDelivery) {
+      throw new BadRequestException('Se requiere la dirección de entrega');
+    }
+    if (!data.items?.length) {
+      throw new BadRequestException('Debe incluir al menos un plato');
+    }
+
+    // Verificar platos
+    const platoIds = data.items.map((i) => i.platoCartaId);
+    const platos = await this.db
+      .select()
+      .from(schema.platoCarta)
+      .where(inArray(schema.platoCarta.id, platoIds));
+    const platoMap = new Map(platos.map((p) => [p.id, p]));
+
+    for (const item of data.items) {
+      const plato = platoMap.get(item.platoCartaId);
+      if (!plato) throw new NotFoundException(`Plato ${item.platoCartaId} no encontrado`);
+      if (!plato.disponible) throw new BadRequestException(`"${plato.nombre}" no está disponible`);
+    }
+
+    const [cajero] = await this.db
+      .select()
+      .from(schema.user)
+      .where(eq(schema.user.id, cajeroId));
+
+    const promosPorPlato = await this.promociones.resolverPromocionesVigentes(platoIds);
+
+    const resultado = await this.db.transaction(async (tx) => {
+      const [visita] = await tx
+        .insert(schema.visitaMesa)
+        .values({
+          abiertaPorUsuarioId: cajeroId,
+          tipo: 'delivery',
+          paraLlevar: true,
+          nombreCliente,
+          telefonoCliente: data.telefonoCliente?.trim() || null,
+          direccionDelivery,
+          costoEnvio: data.costoEnvio.toFixed(2),
+        })
+        .returning();
+
+      const [pedido] = await tx
+        .insert(schema.pedido)
+        .values({
+          visitaMesaId: visita.id,
+          tomadoPorUsuarioId: cajeroId,
+          paraLlevar: true,
+          nombreClienteLlevar: nombreCliente,
+        })
+        .returning();
+
+      const itemsInsert = data.items.map((i) => {
+        const plato = platoMap.get(i.platoCartaId)!;
+        const precioBase = parseFloat(plato.precio);
+        const promo = promosPorPlato.get(i.platoCartaId);
+        const descuentoUnitario = promo
+          ? this.promociones.calcularDescuentoUnitario(precioBase, promo)
+          : 0;
+
+        return {
+          pedidoId: pedido.id,
+          platoCartaId: i.platoCartaId,
+          cantidad: i.cantidad,
+          precioUnitarioCongelado: (precioBase - descuentoUnitario).toFixed(2),
+          descuentoUnitario: descuentoUnitario.toFixed(2),
+          promocionAplicadaId: promo?.id ?? null,
+          notas: i.notas,
+        };
+      });
+
+      const itemsCreados = await tx
+        .insert(schema.itemPedido)
+        .values(itemsInsert)
+        .returning();
+
+      // Descontar stock para bebidas
+      for (const itemCreado of itemsCreados) {
+        const plato = platoMap.get(itemCreado.platoCartaId)!;
+        if (plato.categoria !== 'bebidas') continue;
+
+        const [receta] = await tx
+          .select()
+          .from(schema.recetaPlato)
+          .where(eq(schema.recetaPlato.platoCartaId, plato.id));
+        if (!receta) continue;
+
+        const consumido = receta.cantidadConsumida * itemCreado.cantidad;
+
+        const [insumoActualizado] = await tx
+          .update(schema.insumo)
+          .set({ stockActual: sql`${schema.insumo.stockActual} - ${consumido}`, updatedAt: new Date() })
+          .where(eq(schema.insumo.id, receta.insumoId))
+          .returning({ id: schema.insumo.id, stockActual: schema.insumo.stockActual });
+
+        if ((insumoActualizado?.stockActual ?? 0) <= 0) {
+          const afectados = await tx
+            .select({ id: schema.recetaPlato.platoCartaId })
+            .from(schema.recetaPlato)
+            .where(eq(schema.recetaPlato.insumoId, receta.insumoId));
+          if (afectados.length) {
+            await tx
+              .update(schema.platoCarta)
+              .set({ disponible: false, updatedAt: new Date() })
+              .where(inArray(schema.platoCarta.id, afectados.map((r) => r.id)));
+          }
+        }
+      }
+
+      return { visita, pedido, items: itemsCreados };
+    });
+
+    const CATEGORIAS_NO_COCINA = new Set(['bebidas', 'refrescos_jugos', 'cocteles']);
+    const itemsCocina = resultado.items.filter((i) => {
+      const plato = platoMap.get(i.platoCartaId);
+      return plato && !CATEGORIAS_NO_COCINA.has(plato.categoria);
+    });
+
+    if (itemsCocina.length > 0) {
+      this.printer.printKitchenTicket({
+        pedidoId: resultado.pedido.id,
+        numeroCorto: resultado.pedido.numeroCorto,
+        visitaId: resultado.visita.id,
+        mesaNumero: 0,
+        mesero: cajero?.name ?? cajeroId,
+        paraLlevar: true,
+        nombreClienteLlevar: nombreCliente,
+        items: itemsCocina.map((i) => ({
+          nombre: platoMap.get(i.platoCartaId)!.nombre,
+          cantidad: i.cantidad,
+          notas: i.notas,
+        })),
+        fechaCreacion: resultado.pedido.fechaCreacion,
+      }).catch(() => {});
+    }
+
+    return { ok: true, visitaId: resultado.visita.id };
+  }
 }
+

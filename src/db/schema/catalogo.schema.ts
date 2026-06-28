@@ -16,25 +16,20 @@ import { pgTable, text, integer, numeric, boolean, timestamp, uuid, pgEnum } fro
  *         disponible/no disponible manualmente.
  */
 
-export const categoriaInventarioEnum = pgEnum("categoria_inventario", [
-  "fraccionable", // A
-  "reventa", // B
-  "multi_insumo", // C
-]);
-
-// Sub-tipo de carta: aplica a categoria C (multi_insumo) y B (reventa)
-export const tipoPlatoEnum = pgEnum("tipo_plato", [
-  // multi_insumo (platos elaborados, sin descuento automático de stock)
+export const categoriaProductoEnum = pgEnum("categoria_producto", [
+  "pollo_a_la_brasa",
   "entradas",
   "platos_a_la_carta",
   "parrillas",
   "parrillas_familiares",
   "pastas",
   "guarniciones",
-  // reventa (bebidas)
-  "refresco",  // ej. limonada, chicha — sin descuento automático de stock
-  "bebida",    // ej. gaseosas, agua, cervezas — SI descuenta stock (1:1)
-  "coctel",    // tragos preparados — sin descuento automático de stock
+  "refrescos_jugos",
+  "bebidas",
+  "cocteles",
+  // Productos extra que se cobran a criterio del mesero/cajero: tupper, bolsa,
+  // cubiertos descartables. No tienen receta ni descuentan stock automático.
+  "extras",
 ]);
 
 // --- Insumos (solo aplica a categorias A y B) ---
@@ -66,15 +61,10 @@ export const platoCarta = pgTable("plato_carta", {
   nombre: text("nombre").notNull(), // ej. "1/4 Pollo a la brasa", "Lomo saltado", "Inca Kola 500ml"
   descripcion: text("descripcion"),
   precio: numeric("precio", { precision: 10, scale: 2 }).notNull(),
-  categoriaInventario: categoriaInventarioEnum("categoria_inventario").notNull(),
+  categoria: categoriaProductoEnum("categoria").notNull(),
 
-  // Disponibilidad manual. Para categoria C, este es el UNICO mecanismo
-  // de control de stock: cocina avisa -> mesero/caja marca este campo.
-  // Para A y B tambien existe (ej. se acabaron las gaseosas), pero ahi
-  // normalmente lo dispara el propio sistema cuando stock llega a 0.
+  // Disponibilidad manual.
   disponible: boolean("disponible").notNull().default(true),
-
-  tipoPlato: tipoPlatoEnum("tipo_plato"), // solo para categoria C
 
   activo: boolean("activo").notNull().default(true), // soft-delete del plato (deja de ofrecerse, no se borra historial)
 

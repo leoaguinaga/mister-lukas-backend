@@ -117,14 +117,6 @@ export class AdminService implements OnApplicationBootstrap {
       .where(eq(schema.insumo.id, insumoId))
       .returning({ stockActual: schema.insumo.stockActual });
 
-    await this.db.insert(schema.movimientoStock).values({
-      insumoId,
-      tipo: 'ajuste_manual',
-      cantidad,
-      registradoPorUsuarioId: usuarioId,
-      notas: notas || `Ajuste manual: ${cantidad > 0 ? '+' : ''}${cantidad} ${ins.nombreUnidadMinima}`,
-    });
-
     // Re-habilitar TODOS los platos vinculados si el stock pasa a positivo
     if (cantidad > 0 && (insumoActualizado?.stockActual ?? 0) > 0) {
       const afectados = await this.db

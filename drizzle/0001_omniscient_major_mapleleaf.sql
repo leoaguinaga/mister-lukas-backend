@@ -1,0 +1,1 @@
+ALTER TABLE "pedido" ADD COLUMN "numero_corto" serial NOT NULL;

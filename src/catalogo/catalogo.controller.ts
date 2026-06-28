@@ -53,8 +53,20 @@ export class CatalogoController {
   @Post('platos')
   @UseGuards(AuthGuard)
   @Roles('administracion')
-  createPlato(@Body() body: { nombre: string; precio: string; categoriaInventario: 'fraccionable' | 'reventa' | 'multi_insumo'; tipoPlato?: string; descripcion?: string }) {
+  createPlato(@Body() body: { nombre: string; precio: string; categoria: string; descripcion?: string }) {
     return this.catalogo.createPlato(body as Parameters<CatalogoService['createPlato']>[0]);
+  }
+
+  @Post('platos/bulk')
+  @UseGuards(AuthGuard)
+  @Roles('administracion')
+  createPlatosBulk(
+    @Body() body: {
+      categoria: string;
+      platos: Array<{ nombre: string; precio: string; descripcion?: string }>;
+    },
+  ) {
+    return this.catalogo.createPlatosBulk(body as Parameters<CatalogoService['createPlatosBulk']>[0]);
   }
 
   @Patch('platos/:id')

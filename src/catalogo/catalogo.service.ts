@@ -41,8 +41,8 @@ async function enrichWithStock(
     const receta = recetaMap.get(p.id);
     return {
       ...p,
-      stockActual:        receta ? receta.stockActual : null,
-      nombreUnidadMinima: receta ? receta.nombreUnidadMinima : null,
+      stockActual:        p.categoria === 'bebidas' && receta ? receta.stockActual : null,
+      nombreUnidadMinima: p.categoria === 'bebidas' && receta ? receta.nombreUnidadMinima : null,
     };
   });
 }
@@ -110,20 +110,34 @@ export class CatalogoService {
   async createPlato(data: {
     nombre: string;
     precio: string;
-    categoriaInventario: 'fraccionable' | 'reventa' | 'multi_insumo';
-    tipoPlato?: typeof schema.tipoPlatoEnum.enumValues[number] | null;
+    categoria: typeof schema.categoriaProductoEnum.enumValues[number];
     descripcion?: string;
   }) {
     const [row] = await this.db.insert(schema.platoCarta).values(data).returning();
     return row;
   }
 
+  async createPlatosBulk(data: {
+    categoria: typeof schema.categoriaProductoEnum.enumValues[number];
+    platos: Array<{ nombre: string; precio: string; descripcion?: string }>;
+  }) {
+    if (!data.platos?.length) {
+      throw new Error('Debe proveer al menos un plato.');
+    }
+    const values = data.platos.map((p) => ({
+      nombre: p.nombre,
+      precio: p.precio,
+      categoria: data.categoria,
+      descripcion: p.descripcion || null,
+    }));
+    return this.db.insert(schema.platoCarta).values(values).returning();
+  }
+
   async updatePlato(id: string, data: {
     nombre?: string;
     precio?: string;
     descripcion?: string;
-    categoriaInventario?: 'fraccionable' | 'reventa' | 'multi_insumo';
-    tipoPlato?: typeof schema.tipoPlatoEnum.enumValues[number] | null;
+    categoria?: typeof schema.categoriaProductoEnum.enumValues[number];
     disponible?: boolean;
     activo?: boolean;
   }) {

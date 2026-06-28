@@ -32,6 +32,15 @@ export class MesasController {
     return this.mesas.update(id, body as Parameters<MesasService['update']>[1]);
   }
 
+  @Post('layout')
+  @UseGuards(AuthGuard)
+  @Roles('administracion')
+  actualizarLayout(
+    @Body() body: { posiciones: Array<{ id: string; filaPosicion: number | null; colPosicion: number | null }> },
+  ) {
+    return this.mesas.actualizarLayout(body.posiciones);
+  }
+
   @Delete(':id')
   @UseGuards(AuthGuard)
   @Roles('administracion')

@@ -52,6 +52,7 @@ export class RealPrintService implements PrintService {
   private buildKitchenTicket(data: KitchenTicketData): Buffer {
     const ESC = '\x1b'; const GS = '\x1d'; const LF = '\x0a';
     const fecha = data.fechaCreacion.toLocaleString('es-PE', { timeZone: 'America/Lima', hour12: false });
+    const codigoRonda = `R-${String(data.numeroCorto).padStart(4, '0')}`;
 
     const parts = [
       `${ESC}\x40`,
@@ -60,11 +61,25 @@ export class RealPrintService implements PrintService {
       `** COCINA **${LF}`,
       `${ESC}\x45\x00`,
       `--------------------------------${LF}`,
+      // Código de ronda en grande (doble alto + doble ancho) para que cocina lo lea de un vistazo
+      `${GS}\x21\x11`, `${ESC}\x45\x01`,
+      `${codigoRonda}${LF}`,
+      `${ESC}\x45\x00`, `${GS}\x21\x00`,
+      // Marca "PARA LLEVAR" + nombre del cliente, también en grande
+      ...(data.paraLlevar
+        ? [
+            `${LF}`,
+            `${GS}\x21\x11`, `${ESC}\x45\x01`,
+            `>>> PARA LLEVAR <<<${LF}`,
+            `${ESC}\x45\x00`, `${GS}\x21\x00`,
+            `${ESC}\x45\x01`, `Cliente: ${data.nombreClienteLlevar ?? '-'}${LF}`, `${ESC}\x45\x00`,
+            `${LF}`,
+          ]
+        : []),
       `${ESC}\x61\x00`,
       `Mesa:   ${data.mesaNumero}${LF}`,
       `Mesero: ${data.mesero}${LF}`,
       `Hora:   ${fecha}${LF}`,
-      `ID:     ${data.pedidoId.slice(0, 8)}${LF}`,
       `--------------------------------${LF}`,
       ...data.items.flatMap((item) => [
         `${ESC}\x45\x01`, `${item.cantidad}x ${item.nombre}${LF}`, `${ESC}\x45\x00`,
@@ -94,31 +109,67 @@ export class RealPrintService implements PrintService {
     });
 
     const tieneDescuento = parseFloat(data.descuentoTotal ?? '0') > 0;
-    const subtotalBruto  = (parseFloat(data.total) + parseFloat(data.descuentoTotal ?? '0')).toFixed(2);
+    const costoEnvio = parseFloat(data.costoEnvio ?? '0');
+    const tieneEnvio = costoEnvio > 0.005;
+    const ajusteMonto    = parseFloat(data.ajusteMonto ?? '0');
+    const tieneAjuste    = Math.abs(ajusteMonto) > 0.005;
+
+    const totalItemsNeto = parseFloat(data.total) - costoEnvio;
+    const totalItemsBruto = totalItemsNeto + parseFloat(data.descuentoTotal ?? '0');
+    const totalFinal     = (parseFloat(data.total) + ajusteMonto).toFixed(2);
 
     const parts = [
       `${ESC}\x40`,
       `${ESC}\x61\x01`,
       `${ESC}\x45\x01`, `MISTER LUKA${LF}`, `${ESC}\x45\x00`,
-      `Pollo a la Brasa & Mas${LF}`,
+      data.esPrecuenta ? `** PRECUENTA **${LF}` : `Pollo a la Brasa & Mas${LF}`,
       `--------------------------------${LF}`,
       `${ESC}\x61\x00`,
-      `Mesa:   ${data.mesaNumero}${LF}`,
+      ...(data.tipoVisita === 'llevar'
+        ? [
+            `Llevar: ${data.nombreCliente ?? 'Cliente'}${LF}`,
+          ]
+        : data.tipoVisita === 'delivery'
+        ? [
+            `Delivery: ${data.nombreCliente ?? 'Cliente'}${LF}`,
+            `Telf:   ${data.telefonoCliente ?? '-'}${LF}`,
+            `Dir:    ${(data.direccionDelivery ?? '-').slice(0, 24)}${LF}`,
+          ]
+        : [
+            `Mesa:   ${data.mesaNumero}${LF}`,
+          ]),
       `Fecha:  ${fecha}${LF}`,
       `--------------------------------${LF}`,
       ...itemLines,
       `--------------------------------${LF}`,
+      ...((tieneDescuento || tieneEnvio || tieneAjuste)
+        ? [
+            `Subtotal:           S/${totalItemsBruto.toFixed(2).padStart(6)}${LF}`,
+          ]
+        : []),
       ...(tieneDescuento
         ? [
-            `Subtotal:           S/${subtotalBruto.padStart(6)}${LF}`,
             `Descuento:         -S/${data.descuentoTotal!.padStart(6)}${LF}`,
           ]
         : []),
-      `TOTAL:              S/${data.total.padStart(6)}${LF}`,
-      `Metodo: ${data.metodoPago}${LF}`,
+      ...(tieneEnvio
+        ? [
+            `Costo Envio:        S/${costoEnvio.toFixed(2).padStart(6)}${LF}`,
+          ]
+        : []),
+      ...(tieneAjuste
+        ? [
+            `Ajuste (${(data.motivoAjuste ?? '-').slice(0, 14)}): ${ajusteMonto > 0 ? '+' : '-'}S/${Math.abs(ajusteMonto).toFixed(2).padStart(6)}${LF}`,
+          ]
+        : []),
+      `TOTAL:              S/${totalFinal.padStart(6)}${LF}`,
+      ...(data.esPrecuenta
+        ? [`${LF}** No es comprobante **${LF}`]
+        : [`Metodo: ${data.metodoPago}${LF}`]),
       `--------------------------------${LF}`,
-      `${ESC}\x61\x01`,
-      `Gracias por venir!${LF}`,
+      ...(data.esPrecuenta
+        ? []
+        : [`${ESC}\x61\x01`, `Gracias por venir!${LF}`]),
       `${LF}${LF}${LF}`,
       `${GS}\x56\x42\x00`,
     ];

@@ -1,1 +1,0 @@
-ALTER TABLE "visita_mesa" ADD COLUMN "para_llevar" boolean DEFAULT false NOT NULL;

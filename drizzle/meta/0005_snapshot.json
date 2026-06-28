@@ -1,6 +1,6 @@
 {
-  "id": "44930f0a-c500-4d0c-afdc-e2fbc86d3146",
-  "prevId": "6aab6cb1-65f2-4bf3-8de9-1ad9f7c3dad2",
+  "id": "c7da4cd9-b188-4eb8-ac44-646d2d68d9f7",
+  "prevId": "b6ee41d5-6a22-441a-82fa-d342a6d9854d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -682,6 +682,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "fila_posicion": {
+          "name": "fila_posicion",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "col_posicion": {
+          "name": "col_posicion",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -953,6 +965,18 @@
           "primaryKey": false,
           "notNull": true
         },
+        "ajuste_monto": {
+          "name": "ajuste_monto",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "motivo_ajuste": {
+          "name": "motivo_ajuste",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "fecha_pago": {
           "name": "fecha_pago",
           "type": "timestamp",
@@ -1090,261 +1114,6 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.conteo_stock_diario": {
-      "name": "conteo_stock_diario",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "insumo_id": {
-          "name": "insumo_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "fecha": {
-          "name": "fecha",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "registrado_por_usuario_id": {
-          "name": "registrado_por_usuario_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "stock_inicial_contado": {
-          "name": "stock_inicial_contado",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "stock_final_teorico": {
-          "name": "stock_final_teorico",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "stock_final_contado": {
-          "name": "stock_final_contado",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "merma": {
-          "name": "merma",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "conteo_stock_diario_insumo_id_insumo_id_fk": {
-          "name": "conteo_stock_diario_insumo_id_insumo_id_fk",
-          "tableFrom": "conteo_stock_diario",
-          "tableTo": "insumo",
-          "columnsFrom": [
-            "insumo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "conteo_stock_diario_registrado_por_usuario_id_user_id_fk": {
-          "name": "conteo_stock_diario_registrado_por_usuario_id_user_id_fk",
-          "tableFrom": "conteo_stock_diario",
-          "tableTo": "user",
-          "columnsFrom": [
-            "registrado_por_usuario_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.movimiento_stock": {
-      "name": "movimiento_stock",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "insumo_id": {
-          "name": "insumo_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tipo": {
-          "name": "tipo",
-          "type": "tipo_movimiento_stock",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "cantidad": {
-          "name": "cantidad",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "item_pedido_id": {
-          "name": "item_pedido_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "registrado_por_usuario_id": {
-          "name": "registrado_por_usuario_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "notas": {
-          "name": "notas",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "movimiento_stock_insumo_id_insumo_id_fk": {
-          "name": "movimiento_stock_insumo_id_insumo_id_fk",
-          "tableFrom": "movimiento_stock",
-          "tableTo": "insumo",
-          "columnsFrom": [
-            "insumo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "movimiento_stock_registrado_por_usuario_id_user_id_fk": {
-          "name": "movimiento_stock_registrado_por_usuario_id_user_id_fk",
-          "tableFrom": "movimiento_stock",
-          "tableTo": "user",
-          "columnsFrom": [
-            "registrado_por_usuario_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.sync_diario": {
-      "name": "sync_diario",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "fecha": {
-          "name": "fecha",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "estado": {
-          "name": "estado",
-          "type": "estado_sync",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pendiente'"
-        },
-        "intentos": {
-          "name": "intentos",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "ultimo_error": {
-          "name": "ultimo_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sincronizado_en": {
-          "name": "sincronizado_en",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "sync_diario_fecha_unique": {
-          "name": "sync_diario_fecha_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "fecha"
-          ]
-        }
-      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1577,24 +1346,6 @@
         "tarjeta",
         "yape_plin",
         "transferencia"
-      ]
-    },
-    "public.estado_sync": {
-      "name": "estado_sync",
-      "schema": "public",
-      "values": [
-        "pendiente",
-        "sincronizado",
-        "error"
-      ]
-    },
-    "public.tipo_movimiento_stock": {
-      "name": "tipo_movimiento_stock",
-      "schema": "public",
-      "values": [
-        "venta",
-        "ajuste_manual",
-        "apertura_dia"
       ]
     },
     "public.tipo_descuento": {
