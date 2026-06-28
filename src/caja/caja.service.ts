@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { eq, and, inArray, notInArray, gte, desc, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -17,6 +18,7 @@ type MetodoPago = 'efectivo' | 'tarjeta' | 'yape_plin' | 'transferencia';
 
 @Injectable()
 export class CajaService {
+  private readonly logger = new Logger(CajaService.name);
   constructor(
     @Inject(DRIZZLE) private db: NodePgDatabase<typeof schema>,
     @Inject(PRINT_SERVICE) private printer: PrintService,
@@ -301,7 +303,9 @@ export class CajaService {
       esPrecuenta: true,
       metodoPago: '',
       fechaPago: new Date(),
-    }).catch(() => {});
+    }).catch((err) => {
+      this.logger.error(`Error al imprimir precuenta: ${err.message}`, err.stack);
+    });
 
     return { ok: true, total: detalle.total };
   }
@@ -406,7 +410,9 @@ export class CajaService {
       motivoAjuste: motivoAjuste ?? undefined,
       metodoPago: metodosLabel,
       fechaPago: new Date(),
-    }).catch(() => {});
+    }).catch((err) => {
+      this.logger.error(`Error al imprimir recibo: ${err.message}`, err.stack);
+    });
 
     return nuevosPagos;
   }
@@ -631,7 +637,9 @@ export class CajaService {
           notas: i.notas,
         })),
         fechaCreacion: resultado.pedido.fechaCreacion,
-      }).catch(() => {});
+      }).catch((err) => {
+        this.logger.error(`Error al imprimir ticket de cocina (Llevar): ${err.message}`, err.stack);
+      });
     }
 
     return { ok: true, visitaId: resultado.visita.id };
@@ -787,7 +795,9 @@ export class CajaService {
           notas: i.notas,
         })),
         fechaCreacion: resultado.pedido.fechaCreacion,
-      }).catch(() => {});
+      }).catch((err) => {
+        this.logger.error(`Error al imprimir ticket de cocina (Delivery): ${err.message}`, err.stack);
+      });
     }
 
     return { ok: true, visitaId: resultado.visita.id };

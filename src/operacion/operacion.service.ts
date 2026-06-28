@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { eq, and, inArray, sql, notInArray } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -15,6 +16,7 @@ import * as schema from '../db/schema';
 
 @Injectable()
 export class OperacionService {
+  private readonly logger = new Logger(OperacionService.name);
   constructor(
     @Inject(DRIZZLE) private db: NodePgDatabase<typeof schema>,
     @Inject(PRINT_SERVICE) private printer: PrintService,
@@ -354,7 +356,9 @@ export class OperacionService {
           notas: i.notas,
         })),
         fechaCreacion: resultado.fechaCreacion,
-      }).catch(() => {/* fallo de impresión no interrumpe la operación */});
+      }).catch((err) => {
+        this.logger.error(`Error al imprimir ticket de cocina (Mesa): ${err.message}`, err.stack);
+      });
     }
 
     return resultado;
@@ -497,7 +501,9 @@ export class OperacionService {
       descuentoTotal: '0.00',
       metodoPago: 'pendiente',
       fechaPago: new Date(),
-    }).catch(() => {});
+    }).catch((err) => {
+      this.logger.error(`Error al imprimir precuenta (Mesero): ${err.message}`, err.stack);
+    });
 
     return { ok: true };
   }
@@ -599,7 +605,9 @@ export class OperacionService {
       descuentoTotal: '0.00',
       metodoPago: metodosLabel,
       fechaPago: new Date(),
-    }).catch(() => {});
+    }).catch((err) => {
+      this.logger.error(`Error al imprimir recibo (Pago Mesero): ${err.message}`, err.stack);
+    });
 
     return { ok: true };
   }
