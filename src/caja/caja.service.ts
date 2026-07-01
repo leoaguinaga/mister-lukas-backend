@@ -129,6 +129,61 @@ export class CajaService {
     return nuevoGasto;
   }
 
+  async editarGasto(cajeroId: string, gastoId: string, data: { monto: number; motivo: string }) {
+    const turno = await this.getTurnoActivo(cajeroId);
+    if (!turno) {
+      throw new BadRequestException('No hay turno de caja abierto');
+    }
+
+    const [gastoExistente] = await this.db
+      .select()
+      .from(schema.gasto)
+      .where(and(
+        eq(schema.gasto.id, gastoId),
+        eq(schema.gasto.turnoCajaId, turno.id)
+      ));
+
+    if (!gastoExistente) {
+      throw new NotFoundException('Gasto no encontrado en el turno activo');
+    }
+
+    const [gastoActualizado] = await this.db
+      .update(schema.gasto)
+      .set({
+        monto: data.monto.toFixed(2),
+        motivo: data.motivo.trim(),
+      })
+      .where(eq(schema.gasto.id, gastoId))
+      .returning();
+
+    return gastoActualizado;
+  }
+
+  async eliminarGasto(cajeroId: string, gastoId: string) {
+    const turno = await this.getTurnoActivo(cajeroId);
+    if (!turno) {
+      throw new BadRequestException('No hay turno de caja abierto');
+    }
+
+    const [gastoExistente] = await this.db
+      .select()
+      .from(schema.gasto)
+      .where(and(
+        eq(schema.gasto.id, gastoId),
+        eq(schema.gasto.turnoCajaId, turno.id)
+      ));
+
+    if (!gastoExistente) {
+      throw new NotFoundException('Gasto no encontrado en el turno activo');
+    }
+
+    await this.db
+      .delete(schema.gasto)
+      .where(eq(schema.gasto.id, gastoId));
+
+    return { ok: true };
+  }
+
   // ─── Mesas listas para cobrar ─────────────────────────────────────────────
 
   async getMesasParaCobrar() {

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Request, Patch, Delete } from '@nestjs/common';
 import { CajaService } from './caja.service';
 import { AuthGuard, Roles } from '../auth/auth.guard';
 
@@ -35,6 +35,21 @@ export class CajaController {
     @Body() body: { monto: number; motivo: string },
   ) {
     return this.caja.registrarGasto(req.user.id, body);
+  }  @Patch('shift/expense/:id')
+  editarGasto(
+    @Param('id') id: string,
+    @Request() req: { user: { id: string } },
+    @Body() body: { monto: number; motivo: string },
+  ) {
+    return this.caja.editarGasto(req.user.id, id, body);
+  }
+
+  @Delete('shift/expense/:id')
+  eliminarGasto(
+    @Param('id') id: string,
+    @Request() req: { user: { id: string } },
+  ) {
+    return this.caja.eliminarGasto(req.user.id, id);
   }
 
   @Get('shifts')
