@@ -37,6 +37,7 @@ export const auth = betterAuth({
         type: 'string',
         required: true,
         input: false,
+        defaultValue: 'mesero',
       },
       activo: {
         type: 'boolean',

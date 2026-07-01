@@ -56,6 +56,11 @@ export class OperacionController {
     });
   }
 
+  @Patch('orders/items/:id/cancel')
+  cancelarItemPedido(@Param('id') itemId: string) {
+    return this.operacion.cancelarItemPedido(itemId);
+  }
+
   @Post('visits/:id/close')
   cerrarVisita(@Param('id') visitaId: string) {
     return this.operacion.cerrarVisita(visitaId);

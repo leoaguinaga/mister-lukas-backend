@@ -29,9 +29,27 @@ export class CajaController {
     return this.caja.cerrarTurno(req.user.id, body.montoCierreReal);
   }
 
+  @Post('shift/expense')
+  registrarGasto(
+    @Request() req: { user: { id: string } },
+    @Body() body: { monto: number; motivo: string },
+  ) {
+    return this.caja.registrarGasto(req.user.id, body);
+  }
+
   @Get('shifts')
   getTurnosHoy() {
     return this.caja.getTurnosHoy();
+  }
+
+  @Get('shifts/history')
+  getTurnosHistorial() {
+    return this.caja.getTurnosHistorial();
+  }
+
+  @Get('shifts/:id')
+  getTurnoDetalle(@Param('id') id: string) {
+    return this.caja.getTurnoDetalle(id);
   }
 
   @Get('visits-to-collect')

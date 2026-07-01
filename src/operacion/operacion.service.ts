@@ -183,10 +183,12 @@ export class OperacionService {
       items: items.filter((i) => i.pedidoId === p.id),
     }));
 
-    const total = items.reduce(
-      (sum, i) => sum + parseFloat(i.precioUnitarioCongelado) * i.cantidad,
-      0,
-    );
+    const total = items
+      .filter((i) => i.estado !== 'cancelado')
+      .reduce(
+        (sum, i) => sum + parseFloat(i.precioUnitarioCongelado) * i.cantidad,
+        0,
+      );
 
     return { ...visita, pedidos: pedidosConItems, total: total.toFixed(2) };
   }
@@ -416,40 +418,79 @@ export class OperacionService {
         .where(eq(schema.itemPedido.pedidoId, pedidoId));
 
       for (const item of itemsCancelados) {
-        const [plato] = await this.db
-          .select()
-          .from(schema.platoCarta)
-          .where(eq(schema.platoCarta.id, item.platoCartaId));
-        if (!plato || plato.categoria !== 'bebidas') continue;
-
-        const [receta] = await this.db
-          .select()
-          .from(schema.recetaPlato)
-          .where(eq(schema.recetaPlato.platoCartaId, item.platoCartaId));
-        if (!receta) continue;
-
-        const restaurado = receta.cantidadConsumida * item.cantidad;
-
-        const [insumoActualizado] = await this.db
-          .update(schema.insumo)
-          .set({ stockActual: sql`${schema.insumo.stockActual} + ${restaurado}`, updatedAt: new Date() })
-          .where(eq(schema.insumo.id, receta.insumoId))
-          .returning({ stockActual: schema.insumo.stockActual });
-
-        // Re-habilitar platos si el insumo volvió a tener stock
-        if ((insumoActualizado?.stockActual ?? 0) > 0) {
-          const afectados = await this.db
-            .select({ id: schema.recetaPlato.platoCartaId })
-            .from(schema.recetaPlato)
-            .where(eq(schema.recetaPlato.insumoId, receta.insumoId));
-          if (afectados.length) {
-            await this.db
-              .update(schema.platoCarta)
-              .set({ disponible: true, updatedAt: new Date() })
-              .where(inArray(schema.platoCarta.id, afectados.map((r) => r.id)));
-          }
-        }
+        await this.restaurarStockItem(item);
       }
+    }
+
+    return updated;
+  }
+
+  private async restaurarStockItem(item: typeof schema.itemPedido.$inferSelect) {
+    const [plato] = await this.db
+      .select()
+      .from(schema.platoCarta)
+      .where(eq(schema.platoCarta.id, item.platoCartaId));
+    if (!plato || plato.categoria !== 'bebidas') return;
+
+    const [receta] = await this.db
+      .select()
+      .from(schema.recetaPlato)
+      .where(eq(schema.recetaPlato.platoCartaId, item.platoCartaId));
+    if (!receta) return;
+
+    const restaurado = receta.cantidadConsumida * item.cantidad;
+
+    const [insumoActualizado] = await this.db
+      .update(schema.insumo)
+      .set({ stockActual: sql`${schema.insumo.stockActual} + ${restaurado}`, updatedAt: new Date() })
+      .where(eq(schema.insumo.id, receta.insumoId))
+      .returning({ stockActual: schema.insumo.stockActual });
+
+    // Re-habilitar platos si el insumo volvió a tener stock
+    if ((insumoActualizado?.stockActual ?? 0) > 0) {
+      const afectados = await this.db
+        .select({ id: schema.recetaPlato.platoCartaId })
+        .from(schema.recetaPlato)
+        .where(eq(schema.recetaPlato.insumoId, receta.insumoId));
+      if (afectados.length) {
+        await this.db
+          .update(schema.platoCarta)
+          .set({ disponible: true, updatedAt: new Date() })
+          .where(inArray(schema.platoCarta.id, afectados.map((r) => r.id)));
+      }
+    }
+  }
+
+  async cancelarItemPedido(itemId: string) {
+    const [item] = await this.db
+      .select()
+      .from(schema.itemPedido)
+      .where(eq(schema.itemPedido.id, itemId));
+    if (!item) throw new NotFoundException('Ítem de pedido no encontrado');
+    if (item.estado === 'cancelado') throw new BadRequestException('El producto ya está cancelado');
+
+    // 1. Marcar como cancelado
+    const [updated] = await this.db
+      .update(schema.itemPedido)
+      .set({ estado: 'cancelado' })
+      .where(eq(schema.itemPedido.id, itemId))
+      .returning();
+
+    // 2. Restaurar stock (si aplica)
+    await this.restaurarStockItem(item);
+
+    // 3. Si todos los ítems de esta ronda fueron cancelados, cancelar también la ronda completa
+    const otrosItems = await this.db
+      .select()
+      .from(schema.itemPedido)
+      .where(eq(schema.itemPedido.pedidoId, item.pedidoId));
+
+    const todosCancelados = otrosItems.every((i) => i.estado === 'cancelado');
+    if (todosCancelados) {
+      await this.db
+        .update(schema.pedido)
+        .set({ estado: 'cancelado', motivoCancelacion: 'Todos los productos fueron cancelados individualmente' })
+        .where(eq(schema.pedido.id, item.pedidoId));
     }
 
     return updated;

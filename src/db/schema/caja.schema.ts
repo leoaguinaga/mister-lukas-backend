@@ -62,3 +62,12 @@ export const pago = pgTable("pago", {
 
   fechaPago: timestamp("fecha_pago").notNull().defaultNow(),
 });
+
+export const gasto = pgTable("gasto", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  turnoCajaId: uuid("turno_caja_id").notNull().references(() => turnoCaja.id, { onDelete: "restrict" }),
+  cajeroUsuarioId: text("cajero_usuario_id").notNull().references(() => user.id),
+  monto: numeric("monto", { precision: 10, scale: 2 }).notNull(),
+  motivo: text("motivo").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});

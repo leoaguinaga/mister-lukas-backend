@@ -60,6 +60,12 @@ export class CajaService {
       .where(eq(schema.pago.turnoCajaId, turno.id))
       .orderBy(schema.pago.fechaPago);
 
+    const gastos = await this.db
+      .select()
+      .from(schema.gasto)
+      .where(eq(schema.gasto.turnoCajaId, turno.id))
+      .orderBy(schema.gasto.createdAt);
+
     // Totales por canal de pago
     const porCanal = { efectivo: 0, tarjeta: 0, yape_plin: 0, transferencia: 0 };
     for (const p of pagos) {
@@ -69,10 +75,12 @@ export class CajaService {
 
     const totalEfectivo = porCanal.efectivo;
     const totalTurno = Object.values(porCanal).reduce((s, v) => s + v, 0);
+    const totalGastos = gastos.reduce((s, g) => s + parseFloat(g.monto), 0);
 
     return {
       ...turno,
       pagos,
+      gastos,
       porCanal: {
         efectivo:      porCanal.efectivo.toFixed(2),
         tarjeta:       porCanal.tarjeta.toFixed(2),
@@ -81,7 +89,8 @@ export class CajaService {
       },
       totalEfectivo:     totalEfectivo.toFixed(2),
       totalTurno:        totalTurno.toFixed(2),
-      montoCierreTeorico: (parseFloat(turno.montoApertura) + totalEfectivo).toFixed(2),
+      totalGastos:       totalGastos.toFixed(2),
+      montoCierreTeorico: (parseFloat(turno.montoApertura) + totalEfectivo - totalGastos).toFixed(2),
     };
   }
 
@@ -99,6 +108,25 @@ export class CajaService {
       .returning();
 
     return turno;
+  }
+
+  async registrarGasto(cajeroId: string, data: { monto: number; motivo: string }) {
+    const turno = await this.getTurnoActivo(cajeroId);
+    if (!turno) {
+      throw new BadRequestException('No hay turno de caja abierto');
+    }
+
+    const [nuevoGasto] = await this.db
+      .insert(schema.gasto)
+      .values({
+        turnoCajaId: turno.id,
+        cajeroUsuarioId: cajeroId,
+        monto: data.monto.toFixed(2),
+        motivo: data.motivo.trim(),
+      })
+      .returning();
+
+    return nuevoGasto;
   }
 
   // ─── Mesas listas para cobrar ─────────────────────────────────────────────
@@ -208,7 +236,12 @@ export class CajaService {
       ? await this.db
           .select()
           .from(schema.itemPedido)
-          .where(inArray(schema.itemPedido.pedidoId, pedidos.map((p) => p.id)))
+          .where(
+            and(
+              inArray(schema.itemPedido.pedidoId, pedidos.map((p) => p.id)),
+              notInArray(schema.itemPedido.estado, ['cancelado']),
+            ),
+          )
       : [];
 
     const platos = items.length
@@ -417,6 +450,7 @@ export class CajaService {
     return nuevosPagos;
   }
 
+
   // ─── Historial de turnos del día (para admin) ────────────────────────────
 
   async getTurnosHoy() {
@@ -441,14 +475,22 @@ export class CajaService {
       .from(schema.pago)
       .where(inArray(schema.pago.turnoCajaId, turnoIds));
 
+    const gastos = await this.db
+      .select()
+      .from(schema.gasto)
+      .where(inArray(schema.gasto.turnoCajaId, turnoIds));
+
     return filas.map(({ turno, cajeroNombre }) => {
       const pagosTurno = pagos.filter((p) => p.turnoCajaId === turno.id);
+      const gastosTurno = gastos.filter((g) => g.turnoCajaId === turno.id);
       const porCanal = { efectivo: 0, tarjeta: 0, yape_plin: 0, transferencia: 0 };
       for (const p of pagosTurno) {
         const m = p.metodoPago as keyof typeof porCanal;
         if (m in porCanal) porCanal[m] += parseFloat(p.montoTotal);
       }
       const totalTurno = Object.values(porCanal).reduce((s, v) => s + v, 0);
+      const totalEfectivo = porCanal.efectivo;
+      const totalGastos = gastosTurno.reduce((s, g) => s + parseFloat(g.monto), 0);
       return {
         ...turno,
         cajeroNombre: cajeroNombre ?? 'Desconocido',
@@ -459,9 +501,123 @@ export class CajaService {
           transferencia: porCanal.transferencia.toFixed(2),
         },
         totalTurno: totalTurno.toFixed(2),
+        totalGastos: totalGastos.toFixed(2),
+        montoCierreTeorico: (parseFloat(turno.montoApertura) + totalEfectivo - totalGastos).toFixed(2),
         cobros: pagosTurno.length,
       };
     });
+  }
+
+  // ─── Historial de turnos anteriores (para admin) ─────────────────────────
+
+  async getTurnosHistorial() {
+    const filas = await this.db
+      .select({
+        turno: schema.turnoCaja,
+        cajeroNombre: schema.user.name,
+      })
+      .from(schema.turnoCaja)
+      .leftJoin(schema.user, eq(schema.turnoCaja.cajeroUsuarioId, schema.user.id))
+      .orderBy(desc(schema.turnoCaja.fechaApertura));
+
+    if (!filas.length) return [];
+
+    const turnoIds = filas.map((f) => f.turno.id);
+    const pagos = await this.db
+      .select()
+      .from(schema.pago)
+      .where(inArray(schema.pago.turnoCajaId, turnoIds));
+
+    const gastos = await this.db
+      .select()
+      .from(schema.gasto)
+      .where(inArray(schema.gasto.turnoCajaId, turnoIds));
+
+    return filas.map(({ turno, cajeroNombre }) => {
+      const pagosTurno = pagos.filter((p) => p.turnoCajaId === turno.id);
+      const gastosTurno = gastos.filter((g) => g.turnoCajaId === turno.id);
+      const porCanal = { efectivo: 0, tarjeta: 0, yape_plin: 0, transferencia: 0 };
+      for (const p of pagosTurno) {
+        const m = p.metodoPago as MetodoPago;
+        if (m in porCanal) porCanal[m] += parseFloat(p.montoTotal);
+      }
+      const totalTurno = Object.values(porCanal).reduce((s, v) => s + v, 0);
+      const totalGastos = gastosTurno.reduce((s, g) => s + parseFloat(g.monto), 0);
+      return {
+        ...turno,
+        cajeroNombre: cajeroNombre ?? 'Desconocido',
+        porCanal: {
+          efectivo:      porCanal.efectivo.toFixed(2),
+          tarjeta:       porCanal.tarjeta.toFixed(2),
+          yape_plin:     porCanal.yape_plin.toFixed(2),
+          transferencia: porCanal.transferencia.toFixed(2),
+        },
+        totalTurno: totalTurno.toFixed(2),
+        totalGastos: totalGastos.toFixed(2),
+        cobros: pagosTurno.length,
+      };
+    });
+  }
+
+  async getTurnoDetalle(turnoId: string) {
+    const [turno] = await this.db
+      .select({
+        turno: schema.turnoCaja,
+        cajeroNombre: schema.user.name,
+      })
+      .from(schema.turnoCaja)
+      .leftJoin(schema.user, eq(schema.turnoCaja.cajeroUsuarioId, schema.user.id))
+      .where(eq(schema.turnoCaja.id, turnoId));
+
+    if (!turno) throw new NotFoundException('Turno no encontrado');
+
+    const pagos = await this.db
+      .select({
+        id: schema.pago.id,
+        visitaMesaId: schema.pago.visitaMesaId,
+        metodoPago: schema.pago.metodoPago,
+        montoTotal: schema.pago.montoTotal,
+        fechaPago: schema.pago.fechaPago,
+        mesaNumero: schema.mesa.numero,
+        clienteNombre: schema.visitaMesa.nombreCliente,
+        visitaTipo: schema.visitaMesa.tipo,
+      })
+      .from(schema.pago)
+      .leftJoin(schema.visitaMesa, eq(schema.pago.visitaMesaId, schema.visitaMesa.id))
+      .leftJoin(schema.mesa, eq(schema.visitaMesa.mesaId, schema.mesa.id))
+      .where(eq(schema.pago.turnoCajaId, turnoId))
+      .orderBy(schema.pago.fechaPago);
+
+    const gastos = await this.db
+      .select()
+      .from(schema.gasto)
+      .where(eq(schema.gasto.turnoCajaId, turnoId))
+      .orderBy(schema.gasto.createdAt);
+
+    const porCanal = { efectivo: 0, tarjeta: 0, yape_plin: 0, transferencia: 0 };
+    for (const p of pagos) {
+      const m = p.metodoPago as MetodoPago;
+      if (m in porCanal) porCanal[m] += parseFloat(p.montoTotal);
+    }
+
+    const totalEfectivo = porCanal.efectivo;
+    const totalTurno = Object.values(porCanal).reduce((s, v) => s + v, 0);
+    const totalGastos = gastos.reduce((s, g) => s + parseFloat(g.monto), 0);
+
+    return {
+      ...turno.turno,
+      cajeroNombre: turno.cajeroNombre ?? 'Desconocido',
+      pagos,
+      porCanal: {
+        efectivo:      porCanal.efectivo.toFixed(2),
+        tarjeta:       porCanal.tarjeta.toFixed(2),
+        yape_plin:     porCanal.yape_plin.toFixed(2),
+        transferencia: porCanal.transferencia.toFixed(2),
+      },
+      totalEfectivo:     totalEfectivo.toFixed(2),
+      totalTurno:        totalTurno.toFixed(2),
+      montoCierreTeorico: (parseFloat(turno.turno.montoApertura) + totalEfectivo).toFixed(2),
+    };
   }
 
   // ─── Cerrar turno ─────────────────────────────────────────────────────────
@@ -479,7 +635,13 @@ export class CajaService {
       .filter((p) => p.metodoPago === 'efectivo')
       .reduce((s, p) => s + parseFloat(p.montoTotal), 0);
 
-    const montoCierreTeorico = parseFloat(turno.montoApertura) + totalEfectivo;
+    const [gastosRecord] = await this.db
+      .select({ total: sql<string>`coalesce(sum(${schema.gasto.monto}), '0.00')` })
+      .from(schema.gasto)
+      .where(eq(schema.gasto.turnoCajaId, turno.id));
+    const totalGastos = parseFloat(gastosRecord?.total ?? '0');
+
+    const montoCierreTeorico = parseFloat(turno.montoApertura) + totalEfectivo - totalGastos;
     const diferencia = montoCierreReal - montoCierreTeorico;
 
     const [turnoCerrado] = await this.db
