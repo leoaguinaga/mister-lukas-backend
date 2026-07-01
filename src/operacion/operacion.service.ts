@@ -337,7 +337,7 @@ export class OperacionService {
     // Imprimir comanda: solo platos preparados en cocina. Las bebidas, refrescos
     // y cócteles se sirven directamente desde caja/barra y no necesitan comanda.
     // Si la ronda es 100% bebidas, no se imprime nada (los items quedan en sistema para cobrar).
-    const CATEGORIAS_NO_COCINA = new Set(['bebidas', 'refrescos_jugos', 'cocteles']);
+    const CATEGORIAS_NO_COCINA = new Set(['bebidas', 'refrescos_jugos', 'cocteles', 'extras']);
     const itemsCocina = resultado.items.filter((i) => {
       const plato = platoMap.get(i.platoCartaId);
       return plato && !CATEGORIAS_NO_COCINA.has(plato.categoria);

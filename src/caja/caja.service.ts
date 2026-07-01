@@ -778,7 +778,7 @@ export class CajaService {
       return { visita, pedido, items: itemsCreados };
     });
 
-    const CATEGORIAS_NO_COCINA = new Set(['bebidas', 'refrescos_jugos', 'cocteles']);
+    const CATEGORIAS_NO_COCINA = new Set(['bebidas', 'refrescos_jugos', 'cocteles', 'extras']);
     const itemsCocina = resultado.items.filter((i) => {
       const plato = platoMap.get(i.platoCartaId);
       return plato && !CATEGORIAS_NO_COCINA.has(plato.categoria);
@@ -936,7 +936,7 @@ export class CajaService {
       return { visita, pedido, items: itemsCreados };
     });
 
-    const CATEGORIAS_NO_COCINA = new Set(['bebidas', 'refrescos_jugos', 'cocteles']);
+    const CATEGORIAS_NO_COCINA = new Set(['bebidas', 'refrescos_jugos', 'cocteles', 'extras']);
     const itemsCocina = resultado.items.filter((i) => {
       const plato = platoMap.get(i.platoCartaId);
       return plato && !CATEGORIAS_NO_COCINA.has(plato.categoria);
