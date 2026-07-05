@@ -109,6 +109,14 @@ export class CajaController {
     );
   }
 
+  @Post('visits/:id/cancel')
+  cancelarVisita(
+    @Param('id') visitaId: string,
+    @Body() body: { motivo?: string },
+  ) {
+    return this.caja.cancelarVisita(visitaId, body.motivo ?? '');
+  }
+
   @Post('visits/:id/print-precuenta')
   imprimirPrecuenta(@Param('id') visitaId: string) {
     return this.caja.imprimirPrecuenta(visitaId);

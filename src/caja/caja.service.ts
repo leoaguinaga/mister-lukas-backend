@@ -384,6 +384,7 @@ export class CajaService {
         cantidad: number;
         precioUnitario: string;
         descuentoUnitario: string;
+        itemIds: string[];
       }
     >();
     for (const item of items) {
@@ -391,12 +392,14 @@ export class CajaService {
       const key = `${item.platoCartaId}::${item.descuentoUnitario}`;
       if (resumen.has(key)) {
         resumen.get(key)!.cantidad += item.cantidad;
+        resumen.get(key)!.itemIds.push(item.id);
       } else {
         resumen.set(key, {
           nombre: plato?.nombre ?? item.platoCartaId,
           cantidad: item.cantidad,
           precioUnitario: item.precioUnitarioCongelado,
           descuentoUnitario: item.descuentoUnitario ?? '0.00',
+          itemIds: [item.id],
         });
       }
     }
@@ -1178,5 +1181,108 @@ export class CajaService {
     }
 
     return { ok: true, visitaId: resultado.visita.id };
+  }
+
+  // ─── Cancelar Visita (Pedido Completo) desde Caja ────────────────────────
+
+  async cancelarVisita(visitaId: string, motivo: string) {
+    const [visita] = await this.db
+      .select()
+      .from(schema.visitaMesa)
+      .where(eq(schema.visitaMesa.id, visitaId));
+
+    if (!visita) throw new NotFoundException('Visita no encontrada');
+    if (visita.estado === 'cerrada') throw new BadRequestException('El pedido ya está cerrado');
+
+    const motivoLimpio = motivo?.trim() || 'Cancelado desde Caja';
+
+    return this.db.transaction(async (tx) => {
+      // 1. Obtener todos los pedidos no cancelados de esta visita
+      const pedidos = await tx
+        .select()
+        .from(schema.pedido)
+        .where(
+          and(
+            eq(schema.pedido.visitaMesaId, visitaId),
+            notInArray(schema.pedido.estado, ['cancelado']),
+          ),
+        );
+
+      // 2. Para cada pedido, cancelarlo y restaurar stock de sus ítems
+      for (const p of pedidos) {
+        await tx
+          .update(schema.pedido)
+          .set({ estado: 'cancelado', motivoCancelacion: motivoLimpio })
+          .where(eq(schema.pedido.id, p.id));
+
+        const items = await tx
+          .select()
+          .from(schema.itemPedido)
+          .where(eq(schema.itemPedido.pedidoId, p.id));
+
+        for (const item of items) {
+          if (item.estado !== 'cancelado') {
+            await tx
+              .update(schema.itemPedido)
+              .set({ estado: 'cancelado' })
+              .where(eq(schema.itemPedido.id, item.id));
+
+            // Restaurar stock
+            await this.restaurarStockItemTx(tx, item);
+          }
+        }
+      }
+
+      // 3. Cerrar la visita
+      await tx
+        .update(schema.visitaMesa)
+        .set({ estado: 'cerrada', fechaCierre: new Date() })
+        .where(eq(schema.visitaMesa.id, visitaId));
+
+      // 4. Si tiene mesa asociada, liberarla
+      if (visita.mesaId) {
+        await tx
+          .update(schema.mesa)
+          .set({ estado: 'libre', updatedAt: new Date() })
+          .where(eq(schema.mesa.id, visita.mesaId));
+      }
+
+      return { ok: true };
+    });
+  }
+
+  private async restaurarStockItemTx(tx: any, item: typeof schema.itemPedido.$inferSelect) {
+    const [plato] = await tx
+      .select()
+      .from(schema.platoCarta)
+      .where(eq(schema.platoCarta.id, item.platoCartaId));
+    if (!plato || plato.categoria !== 'bebidas') return;
+
+    const [receta] = await tx
+      .select()
+      .from(schema.recetaPlato)
+      .where(eq(schema.recetaPlato.platoCartaId, item.platoCartaId));
+    if (!receta) return;
+
+    const restaurado = receta.cantidadConsumida * item.cantidad;
+
+    const [insumoActualizado] = await tx
+      .update(schema.insumo)
+      .set({ stockActual: sql`${schema.insumo.stockActual} + ${restaurado}`, updatedAt: new Date() })
+      .where(eq(schema.insumo.id, receta.insumoId))
+      .returning({ stockActual: schema.insumo.stockActual });
+
+    if ((insumoActualizado?.stockActual ?? 0) > 0) {
+      const afectados = await tx
+        .select({ id: schema.recetaPlato.platoCartaId })
+        .from(schema.recetaPlato)
+        .where(eq(schema.recetaPlato.insumoId, receta.insumoId));
+      if (afectados.length) {
+        await tx
+          .update(schema.platoCarta)
+          .set({ disponible: true, updatedAt: new Date() })
+          .where(inArray(schema.platoCarta.id, afectados.map((r) => r.id)));
+      }
+    }
   }
 }
