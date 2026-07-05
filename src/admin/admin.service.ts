@@ -1,4 +1,12 @@
-import { Injectable, Inject, ConflictException, NotFoundException, BadRequestException, OnApplicationBootstrap, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+  OnApplicationBootstrap,
+  Logger,
+} from '@nestjs/common';
 import { eq, sql, inArray, gt } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../db/db.module';
@@ -13,7 +21,9 @@ export class AdminService implements OnApplicationBootstrap {
   async onApplicationBootstrap() {
     try {
       const res = await this.syncDisponible();
-      this.logger.log(`Stock sync al iniciar: ${res.conStock} disponibles, ${res.sinStock} agotados`);
+      this.logger.log(
+        `Stock sync al iniciar: ${res.conStock} disponibles, ${res.sinStock} agotados`,
+      );
     } catch (err) {
       this.logger.warn(`Stock sync falló al iniciar: ${err}`);
     }
@@ -24,11 +34,11 @@ export class AdminService implements OnApplicationBootstrap {
   async listUsuarios() {
     return this.db
       .select({
-        id:        schema.user.id,
-        name:      schema.user.name,
-        email:     schema.user.email,
-        role:      schema.user.role,
-        activo:    schema.user.activo,
+        id: schema.user.id,
+        name: schema.user.name,
+        email: schema.user.email,
+        role: schema.user.role,
+        activo: schema.user.activo,
         createdAt: schema.user.createdAt,
       })
       .from(schema.user)
@@ -61,10 +71,19 @@ export class AdminService implements OnApplicationBootstrap {
       .set({ role: data.role, activo: true })
       .where(eq(schema.user.id, result.user.id));
 
-    return { id: result.user.id, name: data.name, email: data.email, role: data.role, activo: true };
+    return {
+      id: result.user.id,
+      name: data.name,
+      email: data.email,
+      role: data.role,
+      activo: true,
+    };
   }
 
-  async updateUsuario(id: string, data: { activo?: boolean; role?: 'mesero' | 'cajero' | 'administracion' }) {
+  async updateUsuario(
+    id: string,
+    data: { activo?: boolean; role?: 'mesero' | 'cajero' | 'administracion' },
+  ) {
     const [existing] = await this.db
       .select({ id: schema.user.id })
       .from(schema.user)
@@ -84,13 +103,22 @@ export class AdminService implements OnApplicationBootstrap {
       .where(eq(schema.insumo.activo, true));
 
     const recetas = await this.db.select().from(schema.recetaPlato);
-    const platos  = await this.db.select({ id: schema.platoCarta.id, nombre: schema.platoCarta.nombre, disponible: schema.platoCarta.disponible }).from(schema.platoCarta);
+    const platos = await this.db
+      .select({
+        id: schema.platoCarta.id,
+        nombre: schema.platoCarta.nombre,
+        disponible: schema.platoCarta.disponible,
+      })
+      .from(schema.platoCarta);
     const platoMap = new Map(platos.map((p) => [p.id, p]));
 
     return insumos.map((ins) => {
       const platosAsociados = recetas
         .filter((r) => r.insumoId === ins.id)
-        .map((r) => ({ ...platoMap.get(r.platoCartaId), cantidadConsumida: r.cantidadConsumida }))
+        .map((r) => ({
+          ...platoMap.get(r.platoCartaId),
+          cantidadConsumida: r.cantidadConsumida,
+        }))
         .filter(Boolean);
       return { ...ins, platosAsociados };
     });
@@ -103,7 +131,9 @@ export class AdminService implements OnApplicationBootstrap {
     usuarioId: string,
   ) {
     if (!Number.isInteger(cantidad) || cantidad === 0)
-      throw new BadRequestException('Cantidad debe ser un entero distinto de 0');
+      throw new BadRequestException(
+        'Cantidad debe ser un entero distinto de 0',
+      );
 
     const [ins] = await this.db
       .select()
@@ -113,7 +143,10 @@ export class AdminService implements OnApplicationBootstrap {
 
     const [insumoActualizado] = await this.db
       .update(schema.insumo)
-      .set({ stockActual: sql`${schema.insumo.stockActual} + ${cantidad}`, updatedAt: new Date() })
+      .set({
+        stockActual: sql`${schema.insumo.stockActual} + ${cantidad}`,
+        updatedAt: new Date(),
+      })
       .where(eq(schema.insumo.id, insumoId))
       .returning({ stockActual: schema.insumo.stockActual });
 
@@ -127,7 +160,12 @@ export class AdminService implements OnApplicationBootstrap {
         await this.db
           .update(schema.platoCarta)
           .set({ disponible: true, updatedAt: new Date() })
-          .where(inArray(schema.platoCarta.id, afectados.map((r) => r.id)));
+          .where(
+            inArray(
+              schema.platoCarta.id,
+              afectados.map((r) => r.id),
+            ),
+          );
       }
     }
 
@@ -137,11 +175,13 @@ export class AdminService implements OnApplicationBootstrap {
   // Sincroniza disponible de todos los platos A/B según stockActual del insumo
   async syncDisponible() {
     const recetas = await this.db.select().from(schema.recetaPlato);
-    const insumos = await this.db.select({ id: schema.insumo.id, stockActual: schema.insumo.stockActual }).from(schema.insumo);
+    const insumos = await this.db
+      .select({ id: schema.insumo.id, stockActual: schema.insumo.stockActual })
+      .from(schema.insumo);
     const stockMap = new Map(insumos.map((i) => [i.id, i.stockActual]));
 
-    const conStock:    string[] = [];
-    const sinStock:    string[] = [];
+    const conStock: string[] = [];
+    const sinStock: string[] = [];
 
     for (const r of recetas) {
       const stock = stockMap.get(r.insumoId) ?? 0;
@@ -149,12 +189,22 @@ export class AdminService implements OnApplicationBootstrap {
     }
 
     if (conStock.length) {
-      await this.db.update(schema.platoCarta).set({ disponible: true,  updatedAt: new Date() }).where(inArray(schema.platoCarta.id, conStock));
+      await this.db
+        .update(schema.platoCarta)
+        .set({ disponible: true, updatedAt: new Date() })
+        .where(inArray(schema.platoCarta.id, conStock));
     }
     if (sinStock.length) {
-      await this.db.update(schema.platoCarta).set({ disponible: false, updatedAt: new Date() }).where(inArray(schema.platoCarta.id, sinStock));
+      await this.db
+        .update(schema.platoCarta)
+        .set({ disponible: false, updatedAt: new Date() })
+        .where(inArray(schema.platoCarta.id, sinStock));
     }
 
-    return { sincronizados: conStock.length + sinStock.length, conStock: conStock.length, sinStock: sinStock.length };
+    return {
+      sincronizados: conStock.length + sinStock.length,
+      conStock: conStock.length,
+      sinStock: sinStock.length,
+    };
   }
 }

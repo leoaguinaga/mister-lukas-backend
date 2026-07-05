@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as net from 'net';
-import { KitchenTicketData, PrintService, ReceiptData } from './print.interface';
+import {
+  KitchenTicketData,
+  PrintService,
+  ReceiptData,
+} from './print.interface';
 
 @Injectable()
 export class RealPrintService implements PrintService {
@@ -8,30 +12,38 @@ export class RealPrintService implements PrintService {
 
   private get kitchenPrinter() {
     return {
-      ip:   process.env.PRINTER_KITCHEN_IP ?? '',
+      ip: process.env.PRINTER_KITCHEN_IP ?? '',
       port: parseInt(process.env.PRINTER_KITCHEN_PORT ?? '9100'),
     };
   }
 
   private get receiptPrinter() {
     return {
-      ip:   process.env.PRINTER_RECEIPT_IP ?? '',
+      ip: process.env.PRINTER_RECEIPT_IP ?? '',
       port: parseInt(process.env.PRINTER_RECEIPT_PORT ?? '9100'),
     };
   }
 
   async printKitchenTicket(data: KitchenTicketData): Promise<void> {
     const { ip, port } = this.kitchenPrinter;
-    if (!ip) { this.logger.warn('[REAL] PRINTER_KITCHEN_IP no configurada'); return; }
+    if (!ip) {
+      this.logger.warn('[REAL] PRINTER_KITCHEN_IP no configurada');
+      return;
+    }
     await this.sendTcp(ip, port, this.buildKitchenTicket(data));
     this.logger.log(`[REAL] Comanda → Mesa ${data.mesaNumero} (${ip}:${port})`);
   }
 
   async printReceipt(data: ReceiptData): Promise<void> {
     const { ip, port } = this.receiptPrinter;
-    if (!ip) { this.logger.warn('[REAL] PRINTER_RECEIPT_IP no configurada'); return; }
+    if (!ip) {
+      this.logger.warn('[REAL] PRINTER_RECEIPT_IP no configurada');
+      return;
+    }
     await this.sendTcp(ip, port, this.buildReceipt(data));
-    this.logger.log(`[REAL] Recibo → Mesa ${data.mesaNumero} S/${data.total} (${ip}:${port})`);
+    this.logger.log(
+      `[REAL] Recibo → Mesa ${data.mesaNumero} S/${data.total} (${ip}:${port})`,
+    );
   }
 
   private sendTcp(ip: string, port: number, data: Buffer): Promise<void> {
@@ -40,39 +52,59 @@ export class RealPrintService implements PrintService {
       socket.setTimeout(5000);
       socket.connect(port, ip, () => {
         socket.write(data, (err) => {
-          if (err) { socket.destroy(); reject(err); }
-          else { socket.end(); resolve(); }
+          if (err) {
+            socket.destroy();
+            reject(err);
+          } else {
+            socket.end();
+            resolve();
+          }
         });
       });
       socket.on('error', reject);
-      socket.on('timeout', () => { socket.destroy(); reject(new Error(`Timeout ticketera ${ip}`)); });
+      socket.on('timeout', () => {
+        socket.destroy();
+        reject(new Error(`Timeout ticketera ${ip}`));
+      });
     });
   }
 
   private buildKitchenTicket(data: KitchenTicketData): Buffer {
-    const ESC = '\x1b'; const GS = '\x1d'; const LF = '\x0a';
-    const fecha = data.fechaCreacion.toLocaleString('es-PE', { timeZone: 'America/Lima', hour12: false });
+    const ESC = '\x1b';
+    const GS = '\x1d';
+    const LF = '\x0a';
+    const fecha = data.fechaCreacion.toLocaleString('es-PE', {
+      timeZone: 'America/Lima',
+      hour12: false,
+    });
     const codigoRonda = `R-${String(data.numeroCorto).padStart(4, '0')}`;
 
     const parts = [
       `${ESC}\x40`,
       `${ESC}\x61\x01`,
-      `${ESC}\x45\x01`, `MISTER LUKA${LF}`,
+      `${ESC}\x45\x01`,
+      `MISTER LUKA${LF}`,
       `** COCINA **${LF}`,
       `${ESC}\x45\x00`,
       `--------------------------------${LF}`,
       // Código de ronda en grande (doble alto + doble ancho) para que cocina lo lea de un vistazo
-      `${GS}\x21\x11`, `${ESC}\x45\x01`,
+      `${GS}\x21\x11`,
+      `${ESC}\x45\x01`,
       `${codigoRonda}${LF}`,
-      `${ESC}\x45\x00`, `${GS}\x21\x00`,
+      `${ESC}\x45\x00`,
+      `${GS}\x21\x00`,
       // Marca "PARA LLEVAR" + nombre del cliente, también en grande
       ...(data.paraLlevar
         ? [
             `${LF}`,
-            `${GS}\x21\x11`, `${ESC}\x45\x01`,
+            `${GS}\x21\x11`,
+            `${ESC}\x45\x01`,
             `>>> PARA LLEVAR <<<${LF}`,
-            `${ESC}\x45\x00`, `${GS}\x21\x00`,
-            `${ESC}\x45\x01`, `Cliente: ${data.nombreClienteLlevar ?? '-'}${LF}`, `${ESC}\x45\x00`,
+            `${ESC}\x45\x00`,
+            `${GS}\x21\x00`,
+            `${ESC}\x45\x01`,
+            `Cliente: ${data.nombreClienteLlevar ?? '-'}${LF}`,
+            `${ESC}\x45\x00`,
             `${LF}`,
           ]
         : []),
@@ -82,7 +114,9 @@ export class RealPrintService implements PrintService {
       `Hora:   ${fecha}${LF}`,
       `--------------------------------${LF}`,
       ...data.items.flatMap((item) => [
-        `${ESC}\x45\x01`, `${item.cantidad}x ${item.nombre}${LF}`, `${ESC}\x45\x00`,
+        `${ESC}\x45\x01`,
+        `${item.cantidad}x ${item.nombre}${LF}`,
+        `${ESC}\x45\x00`,
         ...(item.notas ? [`   -> ${item.notas}${LF}`] : []),
       ]),
       `--------------------------------${LF}`,
@@ -93,14 +127,20 @@ export class RealPrintService implements PrintService {
   }
 
   private buildReceipt(data: ReceiptData): Buffer {
-    const ESC = '\x1b'; const GS = '\x1d'; const LF = '\x0a';
-    const fecha = data.fechaPago.toLocaleString('es-PE', { timeZone: 'America/Lima', hour12: false });
+    const ESC = '\x1b';
+    const GS = '\x1d';
+    const LF = '\x0a';
+    const fecha = data.fechaPago.toLocaleString('es-PE', {
+      timeZone: 'America/Lima',
+      hour12: false,
+    });
 
     const itemLines = data.items.flatMap((i) => {
       const subtotal = (parseFloat(i.precioUnitario) * i.cantidad).toFixed(2);
-      const nombre   = i.nombre.length > 20 ? i.nombre.slice(0, 19) + '.' : i.nombre;
-      const linea    = `${i.cantidad}x ${nombre.padEnd(22)} S/${subtotal}${LF}`;
-      const descU    = parseFloat(i.descuentoUnitario ?? '0');
+      const nombre =
+        i.nombre.length > 20 ? i.nombre.slice(0, 19) + '.' : i.nombre;
+      const linea = `${i.cantidad}x ${nombre.padEnd(22)} S/${subtotal}${LF}`;
+      const descU = parseFloat(i.descuentoUnitario ?? '0');
       if (descU > 0) {
         const totalDesc = (descU * i.cantidad).toFixed(2);
         return [linea, `   Promo (-S/${totalDesc})${LF}`];
@@ -111,51 +151,46 @@ export class RealPrintService implements PrintService {
     const tieneDescuento = parseFloat(data.descuentoTotal ?? '0') > 0;
     const costoEnvio = parseFloat(data.costoEnvio ?? '0');
     const tieneEnvio = costoEnvio > 0.005;
-    const ajusteMonto    = parseFloat(data.ajusteMonto ?? '0');
-    const tieneAjuste    = Math.abs(ajusteMonto) > 0.005;
+    const ajusteMonto = parseFloat(data.ajusteMonto ?? '0');
+    const tieneAjuste = Math.abs(ajusteMonto) > 0.005;
 
     const totalItemsNeto = parseFloat(data.total) - costoEnvio;
-    const totalItemsBruto = totalItemsNeto + parseFloat(data.descuentoTotal ?? '0');
-    const totalFinal     = (parseFloat(data.total) + ajusteMonto).toFixed(2);
+    const totalItemsBruto =
+      totalItemsNeto + parseFloat(data.descuentoTotal ?? '0');
+    const totalFinal = (parseFloat(data.total) + ajusteMonto).toFixed(2);
 
     const parts = [
       `${ESC}\x40`,
       `${ESC}\x61\x01`,
-      `${ESC}\x45\x01`, `MISTER LUKA${LF}`, `${ESC}\x45\x00`,
+      `${ESC}\x45\x01`,
+      `MISTER LUKA${LF}`,
+      `${ESC}\x45\x00`,
       data.esPrecuenta ? `** PRECUENTA **${LF}` : `Pollo a la Brasa & Mas${LF}`,
       `--------------------------------${LF}`,
       `${ESC}\x61\x00`,
       ...(data.tipoVisita === 'llevar'
-        ? [
-            `Llevar: ${data.nombreCliente ?? 'Cliente'}${LF}`,
-          ]
+        ? [`Llevar: ${data.nombreCliente ?? 'Cliente'}${LF}`]
         : data.tipoVisita === 'delivery'
-        ? [
-            `Delivery: ${data.nombreCliente ?? 'Cliente'}${LF}`,
-            `Telf:   ${data.telefonoCliente ?? '-'}${LF}`,
-            `Dir:    ${(data.direccionDelivery ?? '-').slice(0, 24)}${LF}`,
-          ]
-        : [
-            `Mesa:   ${data.mesaNumero}${LF}`,
-          ]),
+          ? [
+              `Delivery: ${data.nombreCliente ?? 'Cliente'}${LF}`,
+              `Telf:   ${data.telefonoCliente ?? '-'}${LF}`,
+              `Dir:    ${(data.direccionDelivery ?? '-').slice(0, 24)}${LF}`,
+            ]
+          : [`Mesa:   ${data.mesaNumero}${LF}`]),
       `Fecha:  ${fecha}${LF}`,
       `--------------------------------${LF}`,
       ...itemLines,
       `--------------------------------${LF}`,
-      ...((tieneDescuento || tieneEnvio || tieneAjuste)
+      ...(tieneDescuento || tieneEnvio || tieneAjuste
         ? [
             `Subtotal:           S/${totalItemsBruto.toFixed(2).padStart(6)}${LF}`,
           ]
         : []),
       ...(tieneDescuento
-        ? [
-            `Descuento:         -S/${data.descuentoTotal!.padStart(6)}${LF}`,
-          ]
+        ? [`Descuento:         -S/${data.descuentoTotal!.padStart(6)}${LF}`]
         : []),
       ...(tieneEnvio
-        ? [
-            `Costo Envio:        S/${costoEnvio.toFixed(2).padStart(6)}${LF}`,
-          ]
+        ? [`Costo Envio:        S/${costoEnvio.toFixed(2).padStart(6)}${LF}`]
         : []),
       ...(tieneAjuste
         ? [

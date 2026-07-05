@@ -1,4 +1,9 @@
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { eq, and, inArray, asc, isNull, or, gte, lte } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../db/db.module';
@@ -22,17 +27,23 @@ export interface UpsertPromocionInput {
 
 function normalizarDias(dias: number[]): string {
   const unique = Array.from(new Set(dias)).sort((a, b) => a - b);
-  if (unique.length === 0) throw new BadRequestException('Debe seleccionar al menos un día de semana');
+  if (unique.length === 0)
+    throw new BadRequestException('Debe seleccionar al menos un día de semana');
   for (const d of unique) {
     if (!Number.isInteger(d) || d < 1 || d > 7) {
-      throw new BadRequestException('Días de semana inválidos (use 1=lunes a 7=domingo)');
+      throw new BadRequestException(
+        'Días de semana inválidos (use 1=lunes a 7=domingo)',
+      );
     }
   }
   return unique.join(',');
 }
 
 function diasFromCsv(csv: string): number[] {
-  return csv.split(',').map((x) => parseInt(x.trim(), 10)).filter((n) => !Number.isNaN(n));
+  return csv
+    .split(',')
+    .map((x) => parseInt(x.trim(), 10))
+    .filter((n) => !Number.isNaN(n));
 }
 
 // Convierte el día devuelto por JS (0=domingo .. 6=sábado) al estándar ISO (1=lunes .. 7=domingo).
@@ -58,12 +69,19 @@ export class PromocionesService {
     const links = await this.db
       .select()
       .from(schema.promocionPlato)
-      .where(inArray(schema.promocionPlato.promocionId, promos.map((p) => p.id)));
+      .where(
+        inArray(
+          schema.promocionPlato.promocionId,
+          promos.map((p) => p.id),
+        ),
+      );
 
     return promos.map((p) => ({
       ...p,
       diasSemana: diasFromCsv(p.diasSemana),
-      platoCartaIds: links.filter((l) => l.promocionId === p.id).map((l) => l.platoCartaId),
+      platoCartaIds: links
+        .filter((l) => l.promocionId === p.id)
+        .map((l) => l.platoCartaId),
     }));
   }
 
@@ -109,11 +127,18 @@ export class PromocionesService {
 
       if (input.platoCartaIds.length > 0) {
         await tx.insert(schema.promocionPlato).values(
-          input.platoCartaIds.map((platoCartaId) => ({ promocionId: promo.id, platoCartaId })),
+          input.platoCartaIds.map((platoCartaId) => ({
+            promocionId: promo.id,
+            platoCartaId,
+          })),
         );
       }
 
-      return { ...promo, diasSemana: input.diasSemana, platoCartaIds: input.platoCartaIds };
+      return {
+        ...promo,
+        diasSemana: input.diasSemana,
+        platoCartaIds: input.platoCartaIds,
+      };
     });
   }
 
@@ -146,14 +171,23 @@ export class PromocionesService {
         .where(eq(schema.promocion.id, id))
         .returning();
 
-      await tx.delete(schema.promocionPlato).where(eq(schema.promocionPlato.promocionId, id));
+      await tx
+        .delete(schema.promocionPlato)
+        .where(eq(schema.promocionPlato.promocionId, id));
       if (input.platoCartaIds.length > 0) {
         await tx.insert(schema.promocionPlato).values(
-          input.platoCartaIds.map((platoCartaId) => ({ promocionId: id, platoCartaId })),
+          input.platoCartaIds.map((platoCartaId) => ({
+            promocionId: id,
+            platoCartaId,
+          })),
         );
       }
 
-      return { ...updated, diasSemana: input.diasSemana, platoCartaIds: input.platoCartaIds };
+      return {
+        ...updated,
+        diasSemana: input.diasSemana,
+        platoCartaIds: input.platoCartaIds,
+      };
     });
   }
 
@@ -201,15 +235,29 @@ export class PromocionesService {
       .where(
         and(
           eq(schema.promocion.activo, true),
-          or(isNull(schema.promocion.vigenteDesde), lte(schema.promocion.vigenteDesde, fecha)),
-          or(isNull(schema.promocion.vigenteHasta), gte(schema.promocion.vigenteHasta, fecha)),
-          or(isNull(schema.promocion.horaInicio), lte(schema.promocion.horaInicio, hhmmss)),
-          or(isNull(schema.promocion.horaFin), gte(schema.promocion.horaFin, hhmmss)),
+          or(
+            isNull(schema.promocion.vigenteDesde),
+            lte(schema.promocion.vigenteDesde, fecha),
+          ),
+          or(
+            isNull(schema.promocion.vigenteHasta),
+            gte(schema.promocion.vigenteHasta, fecha),
+          ),
+          or(
+            isNull(schema.promocion.horaInicio),
+            lte(schema.promocion.horaInicio, hhmmss),
+          ),
+          or(
+            isNull(schema.promocion.horaFin),
+            gte(schema.promocion.horaFin, hhmmss),
+          ),
         ),
       )
       .orderBy(asc(schema.promocion.createdAt));
 
-    const aplicables = candidatas.filter((p) => diasFromCsv(p.diasSemana).includes(diaIso));
+    const aplicables = candidatas.filter((p) =>
+      diasFromCsv(p.diasSemana).includes(diaIso),
+    );
     if (aplicables.length === 0) return resultado;
 
     const links = await this.db
@@ -217,7 +265,10 @@ export class PromocionesService {
       .from(schema.promocionPlato)
       .where(
         and(
-          inArray(schema.promocionPlato.promocionId, aplicables.map((p) => p.id)),
+          inArray(
+            schema.promocionPlato.promocionId,
+            aplicables.map((p) => p.id),
+          ),
           inArray(schema.promocionPlato.platoCartaId, platoCartaIds),
         ),
       );
@@ -238,7 +289,10 @@ export class PromocionesService {
    * Devuelve el descuento por unidad en soles, dado el precio base y la promo.
    * Nunca supera el precio (no se permite precio negativo).
    */
-  calcularDescuentoUnitario(precioUnitarioBase: number, promo: typeof schema.promocion.$inferSelect): number {
+  calcularDescuentoUnitario(
+    precioUnitarioBase: number,
+    promo: typeof schema.promocion.$inferSelect,
+  ): number {
     const valor = parseFloat(promo.valorDescuento);
     let descuento = 0;
     if (promo.tipoDescuento === 'porcentaje') {
@@ -254,7 +308,8 @@ export class PromocionesService {
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
   private validar(input: UpsertPromocionInput) {
-    if (!input.nombre?.trim()) throw new BadRequestException('El nombre es obligatorio');
+    if (!input.nombre?.trim())
+      throw new BadRequestException('El nombre es obligatorio');
     const valor = parseFloat(input.valorDescuento);
     if (Number.isNaN(valor) || valor <= 0) {
       throw new BadRequestException('Valor de descuento inválido');
@@ -262,11 +317,23 @@ export class PromocionesService {
     if (input.tipoDescuento === 'porcentaje' && valor > 100) {
       throw new BadRequestException('El porcentaje no puede superar 100');
     }
-    if (input.horaInicio && input.horaFin && input.horaInicio >= input.horaFin) {
-      throw new BadRequestException('Hora de inicio debe ser anterior a hora de fin');
+    if (
+      input.horaInicio &&
+      input.horaFin &&
+      input.horaInicio >= input.horaFin
+    ) {
+      throw new BadRequestException(
+        'Hora de inicio debe ser anterior a hora de fin',
+      );
     }
-    if (input.vigenteDesde && input.vigenteHasta && input.vigenteDesde > input.vigenteHasta) {
-      throw new BadRequestException('Vigencia: la fecha de inicio debe ser anterior a la de fin');
+    if (
+      input.vigenteDesde &&
+      input.vigenteHasta &&
+      input.vigenteDesde > input.vigenteHasta
+    ) {
+      throw new BadRequestException(
+        'Vigencia: la fecha de inicio debe ser anterior a la de fin',
+      );
     }
   }
 }

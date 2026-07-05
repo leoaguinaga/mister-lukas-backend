@@ -14,7 +14,12 @@ export interface PrinterInfo {
 export class PrinterManagementService {
   private readonly logger = new Logger(PrinterManagementService.name);
 
-  private get printers(): Array<{ tipo: 'cocina' | 'recibos'; label: string; ip: string; port: number }> {
+  private get printers(): Array<{
+    tipo: 'cocina' | 'recibos';
+    label: string;
+    ip: string;
+    port: number;
+  }> {
     return [
       {
         tipo: 'cocina',
@@ -43,13 +48,20 @@ export class PrinterManagementService {
 
   async testPrint(tipo: 'cocina' | 'recibos'): Promise<void> {
     const printer = this.printers.find((p) => p.tipo === tipo);
-    if (!printer || !printer.ip) throw new Error(`Ticketera "${tipo}" sin IP configurada`);
+    if (!printer || !printer.ip)
+      throw new Error(`Ticketera "${tipo}" sin IP configurada`);
     const buf = this.buildTestPage(printer.label, printer.ip);
     await this.sendTcp(printer.ip, printer.port, buf);
-    this.logger.log(`[MGMT] Prueba de impresión enviada a ${printer.label} (${printer.ip}:${printer.port})`);
+    this.logger.log(
+      `[MGMT] Prueba de impresión enviada a ${printer.label} (${printer.ip}:${printer.port})`,
+    );
   }
 
-  private probe(ip: string, port: number, timeoutMs = 2000): Promise<{ online: boolean; latencyMs?: number }> {
+  private probe(
+    ip: string,
+    port: number,
+    timeoutMs = 2000,
+  ): Promise<{ online: boolean; latencyMs?: number }> {
     return new Promise((resolve) => {
       const start = Date.now();
       const socket = new net.Socket();
@@ -60,7 +72,10 @@ export class PrinterManagementService {
         resolve({ online: true, latencyMs });
       });
       socket.on('error', () => resolve({ online: false }));
-      socket.on('timeout', () => { socket.destroy(); resolve({ online: false }); });
+      socket.on('timeout', () => {
+        socket.destroy();
+        resolve({ online: false });
+      });
     });
   }
 
@@ -70,21 +85,32 @@ export class PrinterManagementService {
       socket.setTimeout(5000);
       socket.connect(port, ip, () => {
         socket.write(data, (err) => {
-          if (err) { socket.destroy(); reject(err); }
-          else { socket.end(); resolve(); }
+          if (err) {
+            socket.destroy();
+            reject(err);
+          } else {
+            socket.end();
+            resolve();
+          }
         });
       });
       socket.on('error', reject);
-      socket.on('timeout', () => { socket.destroy(); reject(new Error(`Timeout al conectar con ticketera ${ip}`)); });
+      socket.on('timeout', () => {
+        socket.destroy();
+        reject(new Error(`Timeout al conectar con ticketera ${ip}`));
+      });
     });
   }
 
   private buildTestPage(label: string, ip: string): Buffer {
     const ESC = '\x1b';
-    const GS  = '\x1d';
-    const LF  = '\x0a';
+    const GS = '\x1d';
+    const LF = '\x0a';
 
-    const fecha = new Date().toLocaleString('es-PE', { timeZone: 'America/Lima', hour12: false });
+    const fecha = new Date().toLocaleString('es-PE', {
+      timeZone: 'America/Lima',
+      hour12: false,
+    });
 
     const parts = [
       `${ESC}\x40`,

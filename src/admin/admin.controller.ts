@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Patch, Param, Body, UseGuards, Req, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Param,
+  Body,
+  UseGuards,
+  Req,
+  BadRequestException,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { AdminService } from './admin.service';
 import { AuthGuard, Roles } from '../auth/auth.guard';
@@ -20,7 +30,13 @@ export class AdminController {
 
   @Post('users')
   crearUsuario(
-    @Body() body: { name: string; email: string; password: string; role: 'mesero' | 'cajero' | 'administracion' },
+    @Body()
+    body: {
+      name: string;
+      email: string;
+      password: string;
+      role: 'mesero' | 'cajero' | 'administracion';
+    },
   ) {
     return this.admin.crearUsuario(body);
   }
@@ -28,7 +44,8 @@ export class AdminController {
   @Patch('users/:id')
   updateUsuario(
     @Param('id') id: string,
-    @Body() body: { activo?: boolean; role?: 'mesero' | 'cajero' | 'administracion' },
+    @Body()
+    body: { activo?: boolean; role?: 'mesero' | 'cajero' | 'administracion' },
   ) {
     return this.admin.updateUsuario(id, body);
   }
@@ -42,8 +59,9 @@ export class AdminController {
 
   @Post('ticketeras/:tipo/test')
   async testPrint(@Param('tipo') tipo: string) {
-    if (tipo !== 'cocina' && tipo !== 'recibos') throw new BadRequestException('tipo inválido');
-    await this.printerMgmt.testPrint(tipo as 'cocina' | 'recibos');
+    if (tipo !== 'cocina' && tipo !== 'recibos')
+      throw new BadRequestException('tipo inválido');
+    await this.printerMgmt.testPrint(tipo);
     return { ok: true };
   }
 
@@ -60,7 +78,12 @@ export class AdminController {
     @Req() req: Request,
   ) {
     const userId = (req as any).user?.id ?? 'sistema';
-    return this.admin.ajustarStock(body.insumoId, body.cantidad, body.notas ?? '', userId);
+    return this.admin.ajustarStock(
+      body.insumoId,
+      body.cantidad,
+      body.notas ?? '',
+      userId,
+    );
   }
 
   @Post('stock/sync')

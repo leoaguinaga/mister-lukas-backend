@@ -1,4 +1,13 @@
-import { pgTable, text, integer, numeric, boolean, timestamp, uuid, pgEnum } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  integer,
+  numeric,
+  boolean,
+  timestamp,
+  uuid,
+  pgEnum,
+} from 'drizzle-orm/pg-core';
 
 /**
  * CATALOGO
@@ -16,71 +25,77 @@ import { pgTable, text, integer, numeric, boolean, timestamp, uuid, pgEnum } fro
  *         disponible/no disponible manualmente.
  */
 
-export const categoriaProductoEnum = pgEnum("categoria_producto", [
-  "pollo_a_la_brasa",
-  "entradas",
-  "platos_a_la_carta",
-  "parrillas",
-  "parrillas_familiares",
-  "pastas",
-  "guarniciones",
-  "refrescos_jugos",
-  "bebidas",
-  "cocteles",
+export const categoriaProductoEnum = pgEnum('categoria_producto', [
+  'pollo_a_la_brasa',
+  'entradas',
+  'platos_a_la_carta',
+  'parrillas',
+  'parrillas_familiares',
+  'pastas',
+  'guarniciones',
+  'refrescos_jugos',
+  'bebidas',
+  'cocteles',
   // Productos extra que se cobran a criterio del mesero/cajero: tupper, bolsa,
   // cubiertos descartables. No tienen receta ni descuentan stock automático.
-  "extras",
+  'extras',
 ]);
 
 // --- Insumos (solo aplica a categorias A y B) ---
 // Para "pollo a la brasa", este es el registro de "pollo_entero",
 // con su stock SIEMPRE expresado en la unidad minima fraccionable
 // (ej. octavos), nunca en unidades enteras con resto decimal.
-export const insumo = pgTable("insumo", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  nombre: text("nombre").notNull(), // ej. "Pollo entero", "Gaseosa Inca Kola 500ml"
+export const insumo = pgTable('insumo', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  nombre: text('nombre').notNull(), // ej. "Pollo entero", "Gaseosa Inca Kola 500ml"
 
   // Cuantas "unidades minimas" componen una unidad de compra.
   // Para pollo: 8 (octavos). Para una gaseosa: 1 (no es fraccionable,
   // cada botella vendida es 1 unidad consumida).
-  unidadesPorUnidadDeCompra: integer("unidades_por_unidad_compra").notNull().default(1),
+  unidadesPorUnidadDeCompra: integer('unidades_por_unidad_compra')
+    .notNull()
+    .default(1),
 
   // Nombre de la unidad minima, solo para mostrar en UI (ej. "octavo", "botella")
-  nombreUnidadMinima: text("nombre_unidad_minima").notNull().default("unidad"),
+  nombreUnidadMinima: text('nombre_unidad_minima').notNull().default('unidad'),
 
-  stockActual: integer("stock_actual").notNull().default(0), // en unidad minima
-  activo: boolean("activo").notNull().default(true),
+  stockActual: integer('stock_actual').notNull().default(0), // en unidad minima
+  activo: boolean('activo').notNull().default(true),
 
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
 // --- Carta: platos / productos que el mesero puede pedir ---
-export const platoCarta = pgTable("plato_carta", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  nombre: text("nombre").notNull(), // ej. "1/4 Pollo a la brasa", "Lomo saltado", "Inca Kola 500ml"
-  descripcion: text("descripcion"),
-  precio: numeric("precio", { precision: 10, scale: 2 }).notNull(),
-  categoria: categoriaProductoEnum("categoria").notNull(),
+export const platoCarta = pgTable('plato_carta', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  nombre: text('nombre').notNull(), // ej. "1/4 Pollo a la brasa", "Lomo saltado", "Inca Kola 500ml"
+  descripcion: text('descripcion'),
+  precio: numeric('precio', { precision: 10, scale: 2 }).notNull(),
+  categoria: categoriaProductoEnum('categoria').notNull(),
 
   // Disponibilidad manual.
-  disponible: boolean("disponible").notNull().default(true),
+  disponible: boolean('disponible').notNull().default(true),
 
-  activo: boolean("activo").notNull().default(true), // soft-delete del plato (deja de ofrecerse, no se borra historial)
+  activo: boolean('activo').notNull().default(true), // soft-delete del plato (deja de ofrecerse, no se borra historial)
 
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
 // --- Receta: cuanto consume un plato de un insumo (solo categorias A/B) ---
 // Un plato de categoria A/B tiene exactamente UNA fila aqui (un solo insumo).
 // Categoria C no tiene filas en esta tabla (por diseno: no se modela su receta).
-export const recetaPlato = pgTable("receta_plato", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  platoCartaId: uuid("plato_carta_id").notNull().references(() => platoCarta.id, { onDelete: "cascade" }),
-  insumoId: uuid("insumo_id").notNull().references(() => insumo.id, { onDelete: "restrict" }),
+export const recetaPlato = pgTable('receta_plato', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  platoCartaId: uuid('plato_carta_id')
+    .notNull()
+    .references(() => platoCarta.id, { onDelete: 'cascade' }),
+  insumoId: uuid('insumo_id')
+    .notNull()
+    .references(() => insumo.id, { onDelete: 'restrict' }),
 
   // Cuantas unidades minimas del insumo consume este plato.
   // "1/8 pollo" -> 1. "1/4 pollo" -> 2. "Pollo entero" -> 8. "Gaseosa" -> 1.
-  cantidadConsumida: integer("cantidad_consumida").notNull(),
+  cantidadConsumida: integer('cantidad_consumida').notNull(),
 });

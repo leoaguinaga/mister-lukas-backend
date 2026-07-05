@@ -13,7 +13,10 @@ export class MesasService {
   }
 
   async findById(id: string) {
-    const [row] = await this.db.select().from(schema.mesa).where(eq(schema.mesa.id, id));
+    const [row] = await this.db
+      .select()
+      .from(schema.mesa)
+      .where(eq(schema.mesa.id, id));
     if (!row) throw new NotFoundException('Mesa no encontrada');
     return row;
   }
@@ -43,19 +46,30 @@ export class MesasService {
   }
 
   async actualizarLayout(
-    posiciones: Array<{ id: string; filaPosicion: number | null; colPosicion: number | null }>,
+    posiciones: Array<{
+      id: string;
+      filaPosicion: number | null;
+      colPosicion: number | null;
+    }>,
   ) {
     for (const p of posiciones) {
       await this.db
         .update(schema.mesa)
-        .set({ filaPosicion: p.filaPosicion, colPosicion: p.colPosicion, updatedAt: new Date() })
+        .set({
+          filaPosicion: p.filaPosicion,
+          colPosicion: p.colPosicion,
+          updatedAt: new Date(),
+        })
         .where(eq(schema.mesa.id, p.id));
     }
     return { ok: true, actualizadas: posiciones.length };
   }
 
   async delete(id: string) {
-    const [row] = await this.db.delete(schema.mesa).where(eq(schema.mesa.id, id)).returning();
+    const [row] = await this.db
+      .delete(schema.mesa)
+      .where(eq(schema.mesa.id, id))
+      .returning();
     if (!row) throw new NotFoundException('Mesa no encontrada');
     return row;
   }

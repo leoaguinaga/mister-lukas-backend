@@ -1,7 +1,18 @@
-import { pgTable, text, integer, boolean, timestamp, uuid, pgEnum, serial, AnyPgColumn, numeric } from "drizzle-orm/pg-core";
-import { user } from "./auth.schema";
-import { platoCarta } from "./catalogo.schema";
-import { promocion } from "./promociones.schema";
+import {
+  pgTable,
+  text,
+  integer,
+  boolean,
+  timestamp,
+  uuid,
+  pgEnum,
+  serial,
+  AnyPgColumn,
+  numeric,
+} from 'drizzle-orm/pg-core';
+import { user } from './auth.schema';
+import { platoCarta } from './catalogo.schema';
+import { promocion } from './promociones.schema';
 
 /**
  * OPERACION
@@ -18,116 +29,133 @@ import { promocion } from "./promociones.schema";
  * deben sumarse en un solo total al momento de pagar en caja.
  */
 
-export const estadoMesaEnum = pgEnum("estado_mesa", ["libre", "ocupada"]);
+export const estadoMesaEnum = pgEnum('estado_mesa', ['libre', 'ocupada']);
 
-export const mesa = pgTable("mesa", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  numero: integer("numero").notNull().unique(), // ej. 1, 2, 3...
-  estado: estadoMesaEnum("estado").notNull().default("libre"),
-  capacidad: integer("capacidad"), // opcional, num. de personas
+export const mesa = pgTable('mesa', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  numero: integer('numero').notNull().unique(), // ej. 1, 2, 3...
+  estado: estadoMesaEnum('estado').notNull().default('libre'),
+  capacidad: integer('capacidad'), // opcional, num. de personas
 
   // Posición en la grilla del salón. Si ambas son null se asume "sin posición":
   // el frontend del mesero las apila al final como antes. La grilla es densa
   // pero acepta huecos vacíos (filas/columnas faltantes).
-  filaPosicion: integer("fila_posicion"),
-  colPosicion: integer("col_posicion"),
+  filaPosicion: integer('fila_posicion'),
+  colPosicion: integer('col_posicion'),
 
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
 // --- Visita de mesa: agrupa todas las rondas de un mismo cliente/grupo ---
 // Se abre cuando el mesero marca la mesa como ocupada (paso 1 del flujo).
 // Se cierra cuando caja libera la mesa (paso 9 del flujo).
-export const estadoVisitaEnum = pgEnum("estado_visita", ["abierta", "cerrada"]);
-export const tipoVisitaEnum = pgEnum("tipo_visita", ["mesa", "llevar", "delivery"]);
+export const estadoVisitaEnum = pgEnum('estado_visita', ['abierta', 'cerrada']);
+export const tipoVisitaEnum = pgEnum('tipo_visita', [
+  'mesa',
+  'llevar',
+  'delivery',
+]);
 
-export const visitaMesa = pgTable("visita_mesa", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  mesaId: uuid("mesa_id").references(() => mesa.id, { onDelete: "restrict" }),
+export const visitaMesa = pgTable('visita_mesa', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  mesaId: uuid('mesa_id').references(() => mesa.id, { onDelete: 'restrict' }),
 
-  abiertaPorUsuarioId: text("abierta_por_usuario_id").notNull().references(() => user.id), // mesero/cajero
-  estado: estadoVisitaEnum("estado").notNull().default("abierta"),
-  tipo: tipoVisitaEnum("tipo").notNull().default("mesa"),
-  paraLlevar: boolean("para_llevar").notNull().default(false), // para llevar (+S/1 por plato elegible - obsoleto/removido recargo automático)
+  abiertaPorUsuarioId: text('abierta_por_usuario_id')
+    .notNull()
+    .references(() => user.id), // mesero/cajero
+  estado: estadoVisitaEnum('estado').notNull().default('abierta'),
+  tipo: tipoVisitaEnum('tipo').notNull().default('mesa'),
+  paraLlevar: boolean('para_llevar').notNull().default(false), // para llevar (+S/1 por plato elegible - obsoleto/removido recargo automático)
 
-  nombreCliente: text("nombre_cliente"),
-  telefonoCliente: text("telefono_cliente"),
-  direccionDelivery: text("direccion_delivery"),
-  costoEnvio: numeric("costo_envio", { precision: 10, scale: 2 }),
+  nombreCliente: text('nombre_cliente'),
+  telefonoCliente: text('telefono_cliente'),
+  direccionDelivery: text('direccion_delivery'),
+  costoEnvio: numeric('costo_envio', { precision: 10, scale: 2 }),
 
-  fechaApertura: timestamp("fecha_apertura").notNull().defaultNow(),
-  fechaCierre: timestamp("fecha_cierre"), // null mientras este abierta
+  fechaApertura: timestamp('fecha_apertura').notNull().defaultNow(),
+  fechaCierre: timestamp('fecha_cierre'), // null mientras este abierta
 });
 
 // --- Pedido: una ronda dentro de una visita ---
-export const estadoPedidoEnum = pgEnum("estado_pedido", [
-  "pendiente", // tomado por el mesero, recien enviado a cocina
-  "en_preparacion", // opcional: cocina ya lo esta cocinando (si se quiere distinguir de "pendiente")
-  "listo", // cocina toco el timbre
-  "entregado", // mesero ya lo entrego al cliente
-  "cancelado", // por si se anula una ronda completa
+export const estadoPedidoEnum = pgEnum('estado_pedido', [
+  'pendiente', // tomado por el mesero, recien enviado a cocina
+  'en_preparacion', // opcional: cocina ya lo esta cocinando (si se quiere distinguir de "pendiente")
+  'listo', // cocina toco el timbre
+  'entregado', // mesero ya lo entrego al cliente
+  'cancelado', // por si se anula una ronda completa
 ]);
 
-export const pedido = pgTable("pedido", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  visitaMesaId: uuid("visita_mesa_id").notNull().references(() => visitaMesa.id, { onDelete: "restrict" }),
-  tomadoPorUsuarioId: text("tomado_por_usuario_id").notNull().references(() => user.id), // mesero
+export const pedido = pgTable('pedido', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  visitaMesaId: uuid('visita_mesa_id')
+    .notNull()
+    .references(() => visitaMesa.id, { onDelete: 'restrict' }),
+  tomadoPorUsuarioId: text('tomado_por_usuario_id')
+    .notNull()
+    .references(() => user.id), // mesero
 
   // Correlativo legible para trazar la ronda entre mesa y cocina ("R-0428").
   // Se asigna automáticamente con un sequence global, sin reset diario.
-  numeroCorto: serial("numero_corto").notNull(),
+  numeroCorto: serial('numero_corto').notNull(),
 
   // Marca de "para llevar" a nivel de RONDA (no de visita): el cliente puede
   // estar comiendo en mesa y pedir solo una parte en tupper. La cocina lo lee
   // del ticket para saber cómo emplatar; el cobro del tupper se hace agregando
   // el producto "Tupper" manualmente (no hay recargo automático).
-  paraLlevar: boolean("para_llevar").notNull().default(false),
-  nombreClienteLlevar: text("nombre_cliente_llevar"),
+  paraLlevar: boolean('para_llevar').notNull().default(false),
+  nombreClienteLlevar: text('nombre_cliente_llevar'),
 
   // Motivo de cancelación (obligatorio si estado='cancelado'). Texto libre, pero
   // el UI ofrece chips con motivos comunes ("demoró mucho", "ya no quiere"...).
-  motivoCancelacion: text("motivo_cancelacion"),
+  motivoCancelacion: text('motivo_cancelacion'),
 
-  estado: estadoPedidoEnum("estado").notNull().default("pendiente"),
+  estado: estadoPedidoEnum('estado').notNull().default('pendiente'),
 
-  fechaCreacion: timestamp("fecha_creacion").notNull().defaultNow(),
-  fechaListo: timestamp("fecha_listo"), // cuando cocina toco el timbre
-  fechaEntregado: timestamp("fecha_entregado"), // cuando el mesero lo entrego
+  fechaCreacion: timestamp('fecha_creacion').notNull().defaultNow(),
+  fechaListo: timestamp('fecha_listo'), // cuando cocina toco el timbre
+  fechaEntregado: timestamp('fecha_entregado'), // cuando el mesero lo entrego
 });
 
 // --- Item de pedido: cada plato dentro de una ronda, con su personalizacion ---
-export const estadoItemPedidoEnum = pgEnum("estado_item_pedido", [
-  "pendiente",
-  "listo",
-  "entregado",
-  "cancelado",
+export const estadoItemPedidoEnum = pgEnum('estado_item_pedido', [
+  'pendiente',
+  'listo',
+  'entregado',
+  'cancelado',
 ]);
 
-export const itemPedido = pgTable("item_pedido", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  pedidoId: uuid("pedido_id").notNull().references(() => pedido.id, { onDelete: "cascade" }),
-  platoCartaId: uuid("plato_carta_id").notNull().references(() => platoCarta.id, { onDelete: "restrict" }),
+export const itemPedido = pgTable('item_pedido', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  pedidoId: uuid('pedido_id')
+    .notNull()
+    .references(() => pedido.id, { onDelete: 'cascade' }),
+  platoCartaId: uuid('plato_carta_id')
+    .notNull()
+    .references(() => platoCarta.id, { onDelete: 'restrict' }),
 
-  cantidad: integer("cantidad").notNull().default(1),
+  cantidad: integer('cantidad').notNull().default(1),
 
   // Precio del plato AL MOMENTO de pedirlo. Se copia desde plato_carta.precio
   // para que si el precio de la carta cambia despues, el historico no se altere.
-  precioUnitarioCongelado: text("precio_unitario_congelado").notNull(),
+  precioUnitarioCongelado: text('precio_unitario_congelado').notNull(),
 
   // Descuento aplicado al precio unitario por una promoción vigente al momento
   // del pedido. Se guarda como monto absoluto en soles por unidad (no porcentaje),
   // así el recibo y los reportes pueden mostrarlo sin recomputar.
   // El precioUnitarioCongelado YA incluye este descuento restado.
-  descuentoUnitario: text("descuento_unitario").notNull().default("0.00"),
-  promocionAplicadaId: uuid("promocion_aplicada_id").references((): AnyPgColumn => promocion.id, { onDelete: "set null" }),
+  descuentoUnitario: text('descuento_unitario').notNull().default('0.00'),
+  promocionAplicadaId: uuid('promocion_aplicada_id').references(
+    (): AnyPgColumn => promocion.id,
+    { onDelete: 'set null' },
+  ),
 
   // Personalizacion en texto libre: "sin crema", "sin aji", "sin arroz", etc.
   // No se modela como opciones estructuradas de la carta -- es una nota
   // operativa del mesero, no una variante de producto con su propio precio.
-  notas: text("notas"),
+  notas: text('notas'),
 
-  estado: estadoItemPedidoEnum("estado").notNull().default("pendiente"),
+  estado: estadoItemPedidoEnum('estado').notNull().default('pendiente'),
 
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
 });

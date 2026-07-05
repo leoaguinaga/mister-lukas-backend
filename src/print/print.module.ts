@@ -7,12 +7,18 @@ import { PrinterManagementService } from './printer-management.service';
 
 const printServiceProvider = {
   provide: PRINT_SERVICE,
-  useClass: process.env.PRINTER_MODE === 'real' ? RealPrintService : MockPrintService,
+  useClass:
+    process.env.PRINTER_MODE === 'real' ? RealPrintService : MockPrintService,
 };
 
 @Module({
   controllers: [DevPrintController],
-  providers: [printServiceProvider, MockPrintService, RealPrintService, PrinterManagementService],
+  providers: [
+    printServiceProvider,
+    MockPrintService,
+    RealPrintService,
+    PrinterManagementService,
+  ],
   exports: [PRINT_SERVICE, PrinterManagementService],
 })
 export class PrintModule {}

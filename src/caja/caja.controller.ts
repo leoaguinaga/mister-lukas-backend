@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request, Patch, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+  Patch,
+  Delete,
+} from '@nestjs/common';
 import { CajaService } from './caja.service';
 import { AuthGuard, Roles } from '../auth/auth.guard';
 
@@ -35,7 +45,8 @@ export class CajaController {
     @Body() body: { monto: number; motivo: string },
   ) {
     return this.caja.registrarGasto(req.user.id, body);
-  }  @Patch('shift/expense/:id')
+  }
+  @Patch('shift/expense/:id')
   editarGasto(
     @Param('id') id: string,
     @Request() req: { user: { id: string } },
@@ -81,12 +92,21 @@ export class CajaController {
   registrarPago(
     @Param('id') visitaId: string,
     @Request() req: { user: { id: string } },
-    @Body() body: {
-      pagos: Array<{ metodoPago: 'efectivo' | 'tarjeta' | 'yape_plin' | 'transferencia'; monto: number }>;
+    @Body()
+    body: {
+      pagos: Array<{
+        metodoPago: 'efectivo' | 'tarjeta' | 'yape_plin' | 'transferencia';
+        monto: number;
+      }>;
       ajuste?: { monto: number; motivo: string };
     },
   ) {
-    return this.caja.registrarPago(req.user.id, visitaId, body.pagos, body.ajuste);
+    return this.caja.registrarPago(
+      req.user.id,
+      visitaId,
+      body.pagos,
+      body.ajuste,
+    );
   }
 
   @Post('visits/:id/print-precuenta')
@@ -97,7 +117,8 @@ export class CajaController {
   @Post('pedidos/llevar')
   crearPedidoLlevar(
     @Request() req: { user: { id: string } },
-    @Body() body: {
+    @Body()
+    body: {
       nombreCliente: string;
       items: Array<{ platoCartaId: string; cantidad: number; notas?: string }>;
     },
@@ -108,7 +129,8 @@ export class CajaController {
   @Post('pedidos/delivery')
   crearPedidoDelivery(
     @Request() req: { user: { id: string } },
-    @Body() body: {
+    @Body()
+    body: {
       nombreCliente: string;
       telefonoCliente?: string;
       direccionDelivery: string;

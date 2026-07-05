@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Patch, Param, Body, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Param,
+  Body,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { OperacionService } from './operacion.service';
 import { AuthGuard } from '../auth/auth.guard';
 
@@ -18,7 +27,10 @@ export class OperacionController {
   }
 
   @Post('tables/:id/open')
-  abrirMesa(@Param('id') mesaId: string, @Request() req: { user: { id: string } }) {
+  abrirMesa(
+    @Param('id') mesaId: string,
+    @Request() req: { user: { id: string } },
+  ) {
     return this.operacion.abrirMesa(mesaId, req.user.id);
   }
 
@@ -31,7 +43,8 @@ export class OperacionController {
   crearPedido(
     @Param('id') visitaId: string,
     @Request() req: { user: { id: string } },
-    @Body() body: {
+    @Body()
+    body: {
       items: Array<{ platoCartaId: string; cantidad: number; notas?: string }>;
       paraLlevar?: boolean;
       nombreClienteLlevar?: string;
@@ -46,7 +59,8 @@ export class OperacionController {
   @Patch('orders/:id/status')
   cambiarEstado(
     @Param('id') pedidoId: string,
-    @Body() body: {
+    @Body()
+    body: {
       estado: 'en_preparacion' | 'listo' | 'entregado' | 'cancelado';
       motivoCancelacion?: string;
     },
@@ -71,7 +85,15 @@ export class OperacionController {
     @Request() req: { user: { id: string } },
     @Body() body?: { nombreCliente?: string },
   ) {
-    return this.operacion.abrirVisitaParaLlevar(req.user.id, body?.nombreCliente);
+    return this.operacion.abrirVisitaParaLlevar(
+      req.user.id,
+      body?.nombreCliente,
+    );
+  }
+
+  @Get('visits/active-llevar-delivery')
+  getVisitasActivasLlevarDelivery() {
+    return this.operacion.getVisitasActivasLlevarDelivery();
   }
 
   @Post('visits/:id/print-bill')
@@ -83,8 +105,18 @@ export class OperacionController {
   registrarPagoMesero(
     @Param('id') visitaId: string,
     @Request() req: { user: { id: string } },
-    @Body() body: { pagos: Array<{ metodoPago: 'efectivo' | 'tarjeta' | 'yape_plin' | 'transferencia'; monto: number }> },
+    @Body()
+    body: {
+      pagos: Array<{
+        metodoPago: 'efectivo' | 'tarjeta' | 'yape_plin' | 'transferencia';
+        monto: number;
+      }>;
+    },
   ) {
-    return this.operacion.registrarPagoMesero(req.user.id, visitaId, body.pagos);
+    return this.operacion.registrarPagoMesero(
+      req.user.id,
+      visitaId,
+      body.pagos,
+    );
   }
 }

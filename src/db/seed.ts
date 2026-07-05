@@ -8,10 +8,30 @@ import * as schema from './schema';
 
 type Rol = 'mesero' | 'cajero' | 'administracion';
 
-const SEED_USERS: Array<{ email: string; name: string; role: Rol; password: string }> = [
-  { email: 'admin@misterluka.local', name: 'Administración', role: 'administracion', password: 'admin1234' },
-  { email: 'cajero@misterluka.local', name: 'Cajero Demo', role: 'cajero', password: 'cajero1234' },
-  { email: 'mesero@misterluka.local', name: 'Mesero Demo', role: 'mesero', password: 'mesero1234' },
+const SEED_USERS: Array<{
+  email: string;
+  name: string;
+  role: Rol;
+  password: string;
+}> = [
+  {
+    email: 'admin@misterluka.local',
+    name: 'Administración',
+    role: 'administracion',
+    password: 'admin1234',
+  },
+  {
+    email: 'cajero@misterluka.local',
+    name: 'Cajero Demo',
+    role: 'cajero',
+    password: 'cajero1234',
+  },
+  {
+    email: 'mesero@misterluka.local',
+    name: 'Mesero Demo',
+    role: 'mesero',
+    password: 'mesero1234',
+  },
 ];
 
 async function main() {
@@ -19,7 +39,10 @@ async function main() {
   const db = drizzle(pool, { schema });
 
   for (const u of SEED_USERS) {
-    const [existing] = await db.select().from(schema.user).where(eq(schema.user.email, u.email));
+    const [existing] = await db
+      .select()
+      .from(schema.user)
+      .where(eq(schema.user.email, u.email));
     if (existing) {
       console.log(`✓ Usuario ya existe: ${u.email}`);
       continue;

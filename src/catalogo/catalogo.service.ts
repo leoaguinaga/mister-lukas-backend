@@ -9,14 +9,19 @@ async function enrichWithStock(
   platos: (typeof schema.platoCarta.$inferSelect)[],
   db: NodePgDatabase<typeof schema>,
 ) {
-  if (!platos.length) return platos.map((p) => ({ ...p, stockActual: null as number | null, nombreUnidadMinima: null as string | null }));
+  if (!platos.length)
+    return platos.map((p) => ({
+      ...p,
+      stockActual: null as number | null,
+      nombreUnidadMinima: null as string | null,
+    }));
 
   const platoIds = platos.map((p) => p.id);
-  const recetas  = await db
+  const recetas = await db
     .select({
-      platoCartaId:      schema.recetaPlato.platoCartaId,
+      platoCartaId: schema.recetaPlato.platoCartaId,
       cantidadConsumida: schema.recetaPlato.cantidadConsumida,
-      stockActual:       schema.insumo.stockActual,
+      stockActual: schema.insumo.stockActual,
       nombreUnidadMinima: schema.insumo.nombreUnidadMinima,
     })
     .from(schema.recetaPlato)
@@ -26,13 +31,16 @@ async function enrichWithStock(
   // Fetch en lote: una query por plato es costoso; hacemos un join simple y filtramos en JS
   const todasRecetas = await db
     .select({
-      platoCartaId:       schema.recetaPlato.platoCartaId,
-      cantidadConsumida:  schema.recetaPlato.cantidadConsumida,
-      stockActual:        schema.insumo.stockActual,
+      platoCartaId: schema.recetaPlato.platoCartaId,
+      cantidadConsumida: schema.recetaPlato.cantidadConsumida,
+      stockActual: schema.insumo.stockActual,
       nombreUnidadMinima: schema.insumo.nombreUnidadMinima,
     })
     .from(schema.recetaPlato)
-    .innerJoin(schema.insumo, eq(schema.recetaPlato.insumoId, schema.insumo.id));
+    .innerJoin(
+      schema.insumo,
+      eq(schema.recetaPlato.insumoId, schema.insumo.id),
+    );
 
   const recetaMap = new Map(todasRecetas.map((r) => [r.platoCartaId, r]));
   void recetas;
@@ -41,8 +49,10 @@ async function enrichWithStock(
     const receta = recetaMap.get(p.id);
     return {
       ...p,
-      stockActual:        p.categoria === 'bebidas' && receta ? receta.stockActual : null,
-      nombreUnidadMinima: p.categoria === 'bebidas' && receta ? receta.nombreUnidadMinima : null,
+      stockActual:
+        p.categoria === 'bebidas' && receta ? receta.stockActual : null,
+      nombreUnidadMinima:
+        p.categoria === 'bebidas' && receta ? receta.nombreUnidadMinima : null,
     };
   });
 }
@@ -54,11 +64,17 @@ export class CatalogoService {
   // ─── Insumos ───
 
   async findAllInsumos() {
-    return this.db.select().from(schema.insumo).where(eq(schema.insumo.activo, true));
+    return this.db
+      .select()
+      .from(schema.insumo)
+      .where(eq(schema.insumo.activo, true));
   }
 
   async findInsumoById(id: string) {
-    const [row] = await this.db.select().from(schema.insumo).where(eq(schema.insumo.id, id));
+    const [row] = await this.db
+      .select()
+      .from(schema.insumo)
+      .where(eq(schema.insumo.id, id));
     if (!row) throw new NotFoundException('Insumo no encontrado');
     return row;
   }
@@ -73,14 +89,21 @@ export class CatalogoService {
     return row;
   }
 
-  async updateInsumo(id: string, data: Partial<{
-    nombre: string;
-    unidadesPorUnidadDeCompra: number;
-    nombreUnidadMinima: string;
-    stockActual: number;
-    activo: boolean;
-  }>) {
-    const [row] = await this.db.update(schema.insumo).set(data).where(eq(schema.insumo.id, id)).returning();
+  async updateInsumo(
+    id: string,
+    data: Partial<{
+      nombre: string;
+      unidadesPorUnidadDeCompra: number;
+      nombreUnidadMinima: string;
+      stockActual: number;
+      activo: boolean;
+    }>,
+  ) {
+    const [row] = await this.db
+      .update(schema.insumo)
+      .set(data)
+      .where(eq(schema.insumo.id, id))
+      .returning();
     if (!row) throw new NotFoundException('Insumo no encontrado');
     return row;
   }
@@ -88,7 +111,10 @@ export class CatalogoService {
   // ─── Platos ───
 
   async findAllPlatos() {
-    const rows = await this.db.select().from(schema.platoCarta).where(eq(schema.platoCarta.activo, true));
+    const rows = await this.db
+      .select()
+      .from(schema.platoCarta)
+      .where(eq(schema.platoCarta.activo, true));
     return enrichWithStock(rows, this.db);
   }
 
@@ -102,7 +128,10 @@ export class CatalogoService {
   }
 
   async findPlatoById(id: string) {
-    const [row] = await this.db.select().from(schema.platoCarta).where(eq(schema.platoCarta.id, id));
+    const [row] = await this.db
+      .select()
+      .from(schema.platoCarta)
+      .where(eq(schema.platoCarta.id, id));
     if (!row) throw new NotFoundException('Plato no encontrado');
     return row;
   }
@@ -110,15 +139,18 @@ export class CatalogoService {
   async createPlato(data: {
     nombre: string;
     precio: string;
-    categoria: typeof schema.categoriaProductoEnum.enumValues[number];
+    categoria: (typeof schema.categoriaProductoEnum.enumValues)[number];
     descripcion?: string;
   }) {
-    const [row] = await this.db.insert(schema.platoCarta).values(data).returning();
+    const [row] = await this.db
+      .insert(schema.platoCarta)
+      .values(data)
+      .returning();
     return row;
   }
 
   async createPlatosBulk(data: {
-    categoria: typeof schema.categoriaProductoEnum.enumValues[number];
+    categoria: (typeof schema.categoriaProductoEnum.enumValues)[number];
     platos: Array<{ nombre: string; precio: string; descripcion?: string }>;
   }) {
     if (!data.platos?.length) {
@@ -133,14 +165,17 @@ export class CatalogoService {
     return this.db.insert(schema.platoCarta).values(values).returning();
   }
 
-  async updatePlato(id: string, data: {
-    nombre?: string;
-    precio?: string;
-    descripcion?: string;
-    categoria?: typeof schema.categoriaProductoEnum.enumValues[number];
-    disponible?: boolean;
-    activo?: boolean;
-  }) {
+  async updatePlato(
+    id: string,
+    data: {
+      nombre?: string;
+      precio?: string;
+      descripcion?: string;
+      categoria?: (typeof schema.categoriaProductoEnum.enumValues)[number];
+      disponible?: boolean;
+      activo?: boolean;
+    },
+  ) {
     const [row] = await this.db
       .update(schema.platoCarta)
       .set({ ...data, updatedAt: new Date() })
@@ -153,7 +188,10 @@ export class CatalogoService {
   // ─── Recetas ───
 
   async findRecetasByPlato(platoCartaId: string) {
-    return this.db.select().from(schema.recetaPlato).where(eq(schema.recetaPlato.platoCartaId, platoCartaId));
+    return this.db
+      .select()
+      .from(schema.recetaPlato)
+      .where(eq(schema.recetaPlato.platoCartaId, platoCartaId));
   }
 
   async createReceta(data: {
@@ -161,12 +199,18 @@ export class CatalogoService {
     insumoId: string;
     cantidadConsumida: number;
   }) {
-    const [row] = await this.db.insert(schema.recetaPlato).values(data).returning();
+    const [row] = await this.db
+      .insert(schema.recetaPlato)
+      .values(data)
+      .returning();
     return row;
   }
 
   async deleteReceta(id: string) {
-    const [row] = await this.db.delete(schema.recetaPlato).where(eq(schema.recetaPlato.id, id)).returning();
+    const [row] = await this.db
+      .delete(schema.recetaPlato)
+      .where(eq(schema.recetaPlato.id, id))
+      .returning();
     if (!row) throw new NotFoundException('Receta no encontrada');
     return row;
   }

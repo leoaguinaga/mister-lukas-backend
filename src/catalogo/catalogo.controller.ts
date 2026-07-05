@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+} from '@nestjs/common';
 import { CatalogoService } from './catalogo.service';
 import { AuthGuard, Roles } from '../auth/auth.guard';
 
@@ -25,7 +34,15 @@ export class CatalogoController {
   @Post('insumos')
   @UseGuards(AuthGuard)
   @Roles('administracion')
-  createInsumo(@Body() body: { nombre: string; unidadesPorUnidadDeCompra?: number; nombreUnidadMinima?: string; stockActual?: number }) {
+  createInsumo(
+    @Body()
+    body: {
+      nombre: string;
+      unidadesPorUnidadDeCompra?: number;
+      nombreUnidadMinima?: string;
+      stockActual?: number;
+    },
+  ) {
     return this.catalogo.createInsumo(body);
   }
 
@@ -33,7 +50,7 @@ export class CatalogoController {
   @UseGuards(AuthGuard)
   @Roles('administracion')
   updateInsumo(@Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.catalogo.updateInsumo(id, body as Parameters<CatalogoService['updateInsumo']>[1]);
+    return this.catalogo.updateInsumo(id, body);
   }
 
   // ─── Platos (admin para CRUD, mesero/cajero para toggle disponibilidad) ───
@@ -53,26 +70,39 @@ export class CatalogoController {
   @Post('platos')
   @UseGuards(AuthGuard)
   @Roles('administracion')
-  createPlato(@Body() body: { nombre: string; precio: string; categoria: string; descripcion?: string }) {
-    return this.catalogo.createPlato(body as Parameters<CatalogoService['createPlato']>[0]);
+  createPlato(
+    @Body()
+    body: {
+      nombre: string;
+      precio: string;
+      categoria: string;
+      descripcion?: string;
+    },
+  ) {
+    return this.catalogo.createPlato(
+      body as Parameters<CatalogoService['createPlato']>[0],
+    );
   }
 
   @Post('platos/bulk')
   @UseGuards(AuthGuard)
   @Roles('administracion')
   createPlatosBulk(
-    @Body() body: {
+    @Body()
+    body: {
       categoria: string;
       platos: Array<{ nombre: string; precio: string; descripcion?: string }>;
     },
   ) {
-    return this.catalogo.createPlatosBulk(body as Parameters<CatalogoService['createPlatosBulk']>[0]);
+    return this.catalogo.createPlatosBulk(
+      body as Parameters<CatalogoService['createPlatosBulk']>[0],
+    );
   }
 
   @Patch('platos/:id')
   @UseGuards(AuthGuard)
   updatePlato(@Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.catalogo.updatePlato(id, body as Parameters<CatalogoService['updatePlato']>[1]);
+    return this.catalogo.updatePlato(id, body);
   }
 
   // ─── Recetas (admin) ───
@@ -87,7 +117,10 @@ export class CatalogoController {
   @Post('platos/:id/recetas')
   @UseGuards(AuthGuard)
   @Roles('administracion')
-  createReceta(@Param('id') platoCartaId: string, @Body() body: { insumoId: string; cantidadConsumida: number }) {
+  createReceta(
+    @Param('id') platoCartaId: string,
+    @Body() body: { insumoId: string; cantidadConsumida: number },
+  ) {
     return this.catalogo.createReceta({ platoCartaId, ...body });
   }
 

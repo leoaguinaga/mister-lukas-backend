@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+} from '@nestjs/common';
 import { PromocionesService } from './promociones.service';
 import type { UpsertPromocionInput } from './promociones.service';
 import { AuthGuard, Roles } from '../auth/auth.guard';

@@ -1,12 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
-import { KitchenTicketData, PrintService, ReceiptData } from './print.interface';
+import {
+  KitchenTicketData,
+  PrintService,
+  ReceiptData,
+} from './print.interface';
 
 const TICKETS_DIR = path.join(process.cwd(), 'dev-tickets');
 
 function ensureDir() {
-  if (!fs.existsSync(TICKETS_DIR)) fs.mkdirSync(TICKETS_DIR, { recursive: true });
+  if (!fs.existsSync(TICKETS_DIR))
+    fs.mkdirSync(TICKETS_DIR, { recursive: true });
 }
 
 function formatDate(d: Date) {
@@ -41,7 +46,10 @@ export class MockPrintService implements PrintService {
       `Hora:    ${formatDate(data.fechaCreacion)}`,
       '─────────────────────────────────',
       ...data.items.map((item) =>
-        [`${item.cantidad}x  ${item.nombre}`, item.notas ? `     → ${item.notas}` : '']
+        [
+          `${item.cantidad}x  ${item.nombre}`,
+          item.notas ? `     → ${item.notas}` : '',
+        ]
           .filter(Boolean)
           .join('\n'),
       ),
@@ -49,8 +57,14 @@ export class MockPrintService implements PrintService {
     ];
 
     const contenido = lineas.join('\n');
-    fs.writeFileSync(path.join(TICKETS_DIR, 'last-kitchen-ticket.txt'), contenido, 'utf8');
-    this.logger.log(`[MOCK] Comanda impresa — Mesa ${data.mesaNumero}, ${data.items.length} item(s)`);
+    fs.writeFileSync(
+      path.join(TICKETS_DIR, 'last-kitchen-ticket.txt'),
+      contenido,
+      'utf8',
+    );
+    this.logger.log(
+      `[MOCK] Comanda impresa — Mesa ${data.mesaNumero}, ${data.items.length} item(s)`,
+    );
   }
 
   async printReceipt(data: ReceiptData): Promise<void> {
@@ -58,7 +72,8 @@ export class MockPrintService implements PrintService {
 
     const itemLines = data.items.flatMap((i) => {
       const subtotal = (parseFloat(i.precioUnitario) * i.cantidad).toFixed(2);
-      const nombre = i.nombre.length > 20 ? i.nombre.slice(0, 19) + '…' : i.nombre;
+      const nombre =
+        i.nombre.length > 20 ? i.nombre.slice(0, 19) + '…' : i.nombre;
       const linea = `${i.cantidad}x ${nombre.padEnd(22)} S/${subtotal}`;
       const descU = parseFloat(i.descuentoUnitario ?? '0');
       if (descU > 0) {
@@ -75,49 +90,46 @@ export class MockPrintService implements PrintService {
     const tieneAjuste = Math.abs(ajusteMonto) > 0.005;
 
     const totalItemsNeto = parseFloat(data.total) - costoEnvio;
-    const totalItemsBruto = totalItemsNeto + parseFloat(data.descuentoTotal ?? '0');
+    const totalItemsBruto =
+      totalItemsNeto + parseFloat(data.descuentoTotal ?? '0');
     const totalFinal = (parseFloat(data.total) + ajusteMonto).toFixed(2);
 
     const lineas = [
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       '          MISTER LUKA             ',
-      data.esPrecuenta ? '       ** PRECUENTA **          ' : '    Pollo a la Brasa & Más        ',
+      data.esPrecuenta
+        ? '       ** PRECUENTA **          '
+        : '    Pollo a la Brasa & Más        ',
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       ...(data.tipoVisita === 'llevar'
-        ? [
-            `Llevar:  ${data.nombreCliente ?? 'Cliente'}`,
-          ]
+        ? [`Llevar:  ${data.nombreCliente ?? 'Cliente'}`]
         : data.tipoVisita === 'delivery'
-        ? [
-            `Delivery: ${data.nombreCliente ?? 'Cliente'}`,
-            `Telf:    ${data.telefonoCliente ?? '—'}`,
-            `Dir:     ${data.direccionDelivery ?? '—'}`,
-          ]
-        : [
-            `Mesa:    ${data.mesaNumero}`,
-          ]),
+          ? [
+              `Delivery: ${data.nombreCliente ?? 'Cliente'}`,
+              `Telf:    ${data.telefonoCliente ?? '—'}`,
+              `Dir:     ${data.direccionDelivery ?? '—'}`,
+            ]
+          : [`Mesa:    ${data.mesaNumero}`]),
       `Fecha:   ${formatDate(data.fechaPago)}`,
       '─────────────────────────────────',
       ...itemLines,
       '─────────────────────────────────',
-      ...((tieneDescuento || tieneEnvio || tieneAjuste)
+      ...(tieneDescuento || tieneEnvio || tieneAjuste
         ? [
             `Subtotal:                  S/${totalItemsBruto.toFixed(2).padStart(6)}`,
           ]
         : []),
       ...(tieneDescuento
-        ? [
-            `Descuento:                -S/${data.descuentoTotal!.padStart(6)}`,
-          ]
+        ? [`Descuento:                -S/${data.descuentoTotal!.padStart(6)}`]
         : []),
       ...(tieneEnvio
-        ? [
-            `Costo Envio:               S/${costoEnvio.toFixed(2).padStart(6)}`,
-          ]
+        ? [`Costo Envio:               S/${costoEnvio.toFixed(2).padStart(6)}`]
         : []),
       ...(tieneAjuste
         ? [
-            `Ajuste${ajusteMonto > 0 ? '   ' : ' '}(${data.motivoAjuste ?? '—'}):`.padEnd(28) +
+            `Ajuste${ajusteMonto > 0 ? '   ' : ' '}(${data.motivoAjuste ?? '—'}):`.padEnd(
+              28,
+            ) +
               ` ${ajusteMonto > 0 ? '+' : '-'}S/${Math.abs(ajusteMonto).toFixed(2).padStart(6)}`,
           ]
         : []),
@@ -126,11 +138,18 @@ export class MockPrintService implements PrintService {
         ? ['', '** No es un comprobante de pago **']
         : [`Método:  ${data.metodoPago}`]),
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-      ...(data.esPrecuenta ? [] : ['        ¡Gracias por venir!       ', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━']),
+      ...(data.esPrecuenta
+        ? []
+        : [
+            '        ¡Gracias por venir!       ',
+            '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+          ]),
     ];
 
     const contenido = lineas.join('\n');
-    const filename = data.esPrecuenta ? 'last-precuenta.txt' : 'last-receipt.txt';
+    const filename = data.esPrecuenta
+      ? 'last-precuenta.txt'
+      : 'last-receipt.txt';
     fs.writeFileSync(path.join(TICKETS_DIR, filename), contenido, 'utf8');
     this.logger.log(
       `[MOCK] ${data.esPrecuenta ? 'Precuenta' : 'Recibo'} impreso — Mesa ${data.mesaNumero}, S/${totalFinal}` +

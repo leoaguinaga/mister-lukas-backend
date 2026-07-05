@@ -43,7 +43,11 @@ export class OperacionService {
       .where(
         and(
           inArray(schema.pedido.visitaMesaId, visitaIds),
-          inArray(schema.pedido.estado, ['pendiente', 'en_preparacion', 'listo']),
+          inArray(schema.pedido.estado, [
+            'pendiente',
+            'en_preparacion',
+            'listo',
+          ]),
         ),
       );
 
@@ -74,7 +78,11 @@ export class OperacionService {
         minutosEspera,
         items: items
           .filter((i) => i.pedidoId === p.id)
-          .map((i) => ({ platoCartaId: i.platoCartaId, cantidad: i.cantidad, notas: i.notas })),
+          .map((i) => ({
+            platoCartaId: i.platoCartaId,
+            cantidad: i.cantidad,
+            notas: i.notas,
+          })),
       };
     });
   }
@@ -91,7 +99,8 @@ export class OperacionService {
           eq(schema.visitaMesa.estado, 'abierta'),
         ),
       );
-    if (!visita) throw new NotFoundException('No hay visita activa en esta mesa');
+    if (!visita)
+      throw new NotFoundException('No hay visita activa en esta mesa');
     return visita;
   }
 
@@ -204,7 +213,9 @@ export class OperacionService {
     const paraLlevar = !!opciones.paraLlevar;
     const nombreClienteLlevar = opciones.nombreClienteLlevar?.trim() ?? '';
     if (paraLlevar && !nombreClienteLlevar) {
-      throw new BadRequestException('Se requiere el nombre del cliente para un pedido para llevar');
+      throw new BadRequestException(
+        'Se requiere el nombre del cliente para un pedido para llevar',
+      );
     }
 
     const [visita] = await this.db
@@ -227,8 +238,10 @@ export class OperacionService {
 
     for (const item of items) {
       const plato = platoMap.get(item.platoCartaId);
-      if (!plato) throw new NotFoundException(`Plato ${item.platoCartaId} no encontrado`);
-      if (!plato.disponible) throw new BadRequestException(`"${plato.nombre}" no está disponible`);
+      if (!plato)
+        throw new NotFoundException(`Plato ${item.platoCartaId} no encontrado`);
+      if (!plato.disponible)
+        throw new BadRequestException(`"${plato.nombre}" no está disponible`);
     }
 
     // Obtener datos de mesa y mesero para el ticket
@@ -312,9 +325,15 @@ export class OperacionService {
 
         const [insumoActualizado] = await tx
           .update(schema.insumo)
-          .set({ stockActual: sql`${schema.insumo.stockActual} - ${consumido}`, updatedAt: new Date() })
+          .set({
+            stockActual: sql`${schema.insumo.stockActual} - ${consumido}`,
+            updatedAt: new Date(),
+          })
           .where(eq(schema.insumo.id, receta.insumoId))
-          .returning({ id: schema.insumo.id, stockActual: schema.insumo.stockActual });
+          .returning({
+            id: schema.insumo.id,
+            stockActual: schema.insumo.stockActual,
+          });
 
         // Auto-marcar sin disponible si el insumo llega a 0
         if ((insumoActualizado?.stockActual ?? 0) <= 0) {
@@ -326,7 +345,12 @@ export class OperacionService {
             await tx
               .update(schema.platoCarta)
               .set({ disponible: false, updatedAt: new Date() })
-              .where(inArray(schema.platoCarta.id, afectados.map((r) => r.id)));
+              .where(
+                inArray(
+                  schema.platoCarta.id,
+                  afectados.map((r) => r.id),
+                ),
+              );
           }
         }
       }
@@ -337,30 +361,40 @@ export class OperacionService {
     // Imprimir comanda: solo platos preparados en cocina. Las bebidas, refrescos
     // y cócteles se sirven directamente desde caja/barra y no necesitan comanda.
     // Si la ronda es 100% bebidas, no se imprime nada (los items quedan en sistema para cobrar).
-    const CATEGORIAS_NO_COCINA = new Set(['bebidas', 'refrescos_jugos', 'cocteles', 'extras']);
+    const CATEGORIAS_NO_COCINA = new Set([
+      'bebidas',
+      'refrescos_jugos',
+      'cocteles',
+      'extras',
+    ]);
     const itemsCocina = resultado.items.filter((i) => {
       const plato = platoMap.get(i.platoCartaId);
       return plato && !CATEGORIAS_NO_COCINA.has(plato.categoria);
     });
 
     if (itemsCocina.length > 0) {
-      this.printer.printKitchenTicket({
-        pedidoId: resultado.id,
-        numeroCorto: resultado.numeroCorto,
-        visitaId,
-        mesaNumero: mesa?.numero ?? 0,
-        mesero: mesero?.name ?? usuarioId,
-        paraLlevar: resultado.paraLlevar,
-        nombreClienteLlevar: resultado.nombreClienteLlevar ?? undefined,
-        items: itemsCocina.map((i) => ({
-          nombre: platoMap.get(i.platoCartaId)!.nombre,
-          cantidad: i.cantidad,
-          notas: i.notas,
-        })),
-        fechaCreacion: resultado.fechaCreacion,
-      }).catch((err) => {
-        this.logger.error(`Error al imprimir ticket de cocina (Mesa): ${err.message}`, err.stack);
-      });
+      this.printer
+        .printKitchenTicket({
+          pedidoId: resultado.id,
+          numeroCorto: resultado.numeroCorto,
+          visitaId,
+          mesaNumero: mesa?.numero ?? 0,
+          mesero: mesero?.name ?? usuarioId,
+          paraLlevar: resultado.paraLlevar,
+          nombreClienteLlevar: resultado.nombreClienteLlevar ?? undefined,
+          items: itemsCocina.map((i) => ({
+            nombre: platoMap.get(i.platoCartaId)!.nombre,
+            cantidad: i.cantidad,
+            notas: i.notas,
+          })),
+          fechaCreacion: resultado.fechaCreacion,
+        })
+        .catch((err) => {
+          this.logger.error(
+            `Error al imprimir ticket de cocina (Mesa): ${err.message}`,
+            err.stack,
+          );
+        });
     }
 
     return resultado;
@@ -381,11 +415,11 @@ export class OperacionService {
     if (!pedido) throw new NotFoundException('Pedido no encontrado');
 
     const TRANSICIONES: Record<string, string[]> = {
-      pendiente:      ['en_preparacion', 'listo', 'entregado', 'cancelado'],
+      pendiente: ['en_preparacion', 'listo', 'entregado', 'cancelado'],
       en_preparacion: ['listo', 'entregado', 'cancelado'],
-      listo:          ['entregado', 'cancelado'],
-      entregado:      [],
-      cancelado:      [],
+      listo: ['entregado', 'cancelado'],
+      entregado: [],
+      cancelado: [],
     };
 
     if (!TRANSICIONES[pedido.estado]?.includes(nuevoEstado)) {
@@ -402,7 +436,8 @@ export class OperacionService {
     const timestamps: Partial<typeof schema.pedido.$inferInsert> = {};
     if (nuevoEstado === 'listo') timestamps.fechaListo = new Date();
     if (nuevoEstado === 'entregado') timestamps.fechaEntregado = new Date();
-    if (nuevoEstado === 'cancelado') timestamps.motivoCancelacion = motivoCancelacion;
+    if (nuevoEstado === 'cancelado')
+      timestamps.motivoCancelacion = motivoCancelacion;
 
     const [updated] = await this.db
       .update(schema.pedido)
@@ -425,7 +460,9 @@ export class OperacionService {
     return updated;
   }
 
-  private async restaurarStockItem(item: typeof schema.itemPedido.$inferSelect) {
+  private async restaurarStockItem(
+    item: typeof schema.itemPedido.$inferSelect,
+  ) {
     const [plato] = await this.db
       .select()
       .from(schema.platoCarta)
@@ -442,7 +479,10 @@ export class OperacionService {
 
     const [insumoActualizado] = await this.db
       .update(schema.insumo)
-      .set({ stockActual: sql`${schema.insumo.stockActual} + ${restaurado}`, updatedAt: new Date() })
+      .set({
+        stockActual: sql`${schema.insumo.stockActual} + ${restaurado}`,
+        updatedAt: new Date(),
+      })
       .where(eq(schema.insumo.id, receta.insumoId))
       .returning({ stockActual: schema.insumo.stockActual });
 
@@ -456,7 +496,12 @@ export class OperacionService {
         await this.db
           .update(schema.platoCarta)
           .set({ disponible: true, updatedAt: new Date() })
-          .where(inArray(schema.platoCarta.id, afectados.map((r) => r.id)));
+          .where(
+            inArray(
+              schema.platoCarta.id,
+              afectados.map((r) => r.id),
+            ),
+          );
       }
     }
   }
@@ -467,7 +512,8 @@ export class OperacionService {
       .from(schema.itemPedido)
       .where(eq(schema.itemPedido.id, itemId));
     if (!item) throw new NotFoundException('Ítem de pedido no encontrado');
-    if (item.estado === 'cancelado') throw new BadRequestException('El producto ya está cancelado');
+    if (item.estado === 'cancelado')
+      throw new BadRequestException('El producto ya está cancelado');
 
     // 1. Marcar como cancelado
     const [updated] = await this.db
@@ -489,7 +535,11 @@ export class OperacionService {
     if (todosCancelados) {
       await this.db
         .update(schema.pedido)
-        .set({ estado: 'cancelado', motivoCancelacion: 'Todos los productos fueron cancelados individualmente' })
+        .set({
+          estado: 'cancelado',
+          motivoCancelacion:
+            'Todos los productos fueron cancelados individualmente',
+        })
         .where(eq(schema.pedido.id, item.pedidoId));
     }
 
@@ -500,7 +550,8 @@ export class OperacionService {
 
   async imprimirCuenta(visitaId: string) {
     const visita = await this.getVisita(visitaId);
-    if (visita.estado === 'cerrada') throw new BadRequestException('La visita ya está cerrada');
+    if (visita.estado === 'cerrada')
+      throw new BadRequestException('La visita ya está cerrada');
 
     const [mesa] = visita.mesaId
       ? await this.db
@@ -515,11 +566,22 @@ export class OperacionService {
 
     const platoIds = [...new Set(items.map((i) => i.platoCartaId))];
     const platos = platoIds.length
-      ? await this.db.select().from(schema.platoCarta).where(inArray(schema.platoCarta.id, platoIds))
+      ? await this.db
+          .select()
+          .from(schema.platoCarta)
+          .where(inArray(schema.platoCarta.id, platoIds))
       : [];
     const platoMap = new Map(platos.map((p) => [p.id, p]));
 
-    const resumen = new Map<string, { nombre: string; cantidad: number; precioUnitario: string; descuentoUnitario: string }>();
+    const resumen = new Map<
+      string,
+      {
+        nombre: string;
+        cantidad: number;
+        precioUnitario: string;
+        descuentoUnitario: string;
+      }
+    >();
     for (const item of items) {
       const key = `${item.platoCartaId}::${item.descuentoUnitario}`;
       if (resumen.has(key)) {
@@ -534,17 +596,22 @@ export class OperacionService {
       }
     }
 
-    this.printer.printReceipt({
-      visitaId,
-      mesaNumero: mesa?.numero ?? 0,
-      items: Array.from(resumen.values()),
-      total: visita.total,
-      descuentoTotal: '0.00',
-      metodoPago: 'pendiente',
-      fechaPago: new Date(),
-    }).catch((err) => {
-      this.logger.error(`Error al imprimir precuenta (Mesero): ${err.message}`, err.stack);
-    });
+    this.printer
+      .printReceipt({
+        visitaId,
+        mesaNumero: mesa?.numero ?? 0,
+        items: Array.from(resumen.values()),
+        total: visita.total,
+        descuentoTotal: '0.00',
+        metodoPago: 'pendiente',
+        fechaPago: new Date(),
+      })
+      .catch((err) => {
+        this.logger.error(
+          `Error al imprimir precuenta (Mesero): ${err.message}`,
+          err.stack,
+        );
+      });
 
     return { ok: true };
   }
@@ -554,9 +621,13 @@ export class OperacionService {
   async registrarPagoMesero(
     usuarioId: string,
     visitaId: string,
-    pagos: Array<{ metodoPago: 'efectivo' | 'tarjeta' | 'yape_plin' | 'transferencia'; monto: number }>,
+    pagos: Array<{
+      metodoPago: 'efectivo' | 'tarjeta' | 'yape_plin' | 'transferencia';
+      monto: number;
+    }>,
   ) {
-    if (!pagos.length) throw new BadRequestException('Debe incluir al menos un método de pago');
+    if (!pagos.length)
+      throw new BadRequestException('Debe incluir al menos un método de pago');
 
     // Buscar cualquier turno de caja abierto
     const [turno] = await this.db
@@ -564,16 +635,21 @@ export class OperacionService {
       .from(schema.turnoCaja)
       .where(eq(schema.turnoCaja.estado, 'abierto'));
 
-    if (!turno) throw new BadRequestException('No hay turno de caja abierto. Pide al cajero que abra el turno.');
+    if (!turno)
+      throw new BadRequestException(
+        'No hay turno de caja abierto. Pide al cajero que abra el turno.',
+      );
 
     const [pagoExistente] = await this.db
       .select()
       .from(schema.pago)
       .where(eq(schema.pago.visitaMesaId, visitaId));
-    if (pagoExistente) throw new ConflictException('Esta visita ya fue cobrada');
+    if (pagoExistente)
+      throw new ConflictException('Esta visita ya fue cobrada');
 
     const visita = await this.getVisita(visitaId);
-    if (visita.estado === 'cerrada') throw new BadRequestException('La visita ya está cerrada');
+    if (visita.estado === 'cerrada')
+      throw new BadRequestException('La visita ya está cerrada');
 
     const totalEsperado = parseFloat(visita.total);
     const totalRecibido = pagos.reduce((s, p) => s + p.monto, 0);
@@ -596,11 +672,22 @@ export class OperacionService {
 
     const platoIds = [...new Set(items.map((i) => i.platoCartaId))];
     const platos = platoIds.length
-      ? await this.db.select().from(schema.platoCarta).where(inArray(schema.platoCarta.id, platoIds))
+      ? await this.db
+          .select()
+          .from(schema.platoCarta)
+          .where(inArray(schema.platoCarta.id, platoIds))
       : [];
     const platoMap = new Map(platos.map((p) => [p.id, p]));
 
-    const resumen = new Map<string, { nombre: string; cantidad: number; precioUnitario: string; descuentoUnitario: string }>();
+    const resumen = new Map<
+      string,
+      {
+        nombre: string;
+        cantidad: number;
+        precioUnitario: string;
+        descuentoUnitario: string;
+      }
+    >();
     for (const item of items) {
       const key = `${item.platoCartaId}::${item.descuentoUnitario}`;
       if (resumen.has(key)) {
@@ -637,18 +724,25 @@ export class OperacionService {
         .where(eq(schema.mesa.id, visita.mesaId));
     }
 
-    const metodosLabel = pagos.map((p) => p.metodoPago.replace('_', '/')).join(' + ');
-    this.printer.printReceipt({
-      visitaId,
-      mesaNumero: mesa?.numero ?? 0,
-      items: Array.from(resumen.values()),
-      total: visita.total,
-      descuentoTotal: '0.00',
-      metodoPago: metodosLabel,
-      fechaPago: new Date(),
-    }).catch((err) => {
-      this.logger.error(`Error al imprimir recibo (Pago Mesero): ${err.message}`, err.stack);
-    });
+    const metodosLabel = pagos
+      .map((p) => p.metodoPago.replace('_', '/'))
+      .join(' + ');
+    this.printer
+      .printReceipt({
+        visitaId,
+        mesaNumero: mesa?.numero ?? 0,
+        items: Array.from(resumen.values()),
+        total: visita.total,
+        descuentoTotal: '0.00',
+        metodoPago: metodosLabel,
+        fechaPago: new Date(),
+      })
+      .catch((err) => {
+        this.logger.error(
+          `Error al imprimir recibo (Pago Mesero): ${err.message}`,
+          err.stack,
+        );
+      });
 
     return { ok: true };
   }
@@ -720,6 +814,78 @@ export class OperacionService {
       }
 
       return visitaCerrada;
+    });
+  }
+
+  // ─── Listar visitas activas para llevar y delivery ───────────────────────
+
+  async getVisitasActivasLlevarDelivery() {
+    const visitas = await this.db
+      .select()
+      .from(schema.visitaMesa)
+      .where(
+        and(
+          eq(schema.visitaMesa.estado, 'abierta'),
+          inArray(schema.visitaMesa.tipo, ['llevar', 'delivery']),
+        ),
+      );
+
+    if (visitas.length === 0) return [];
+
+    const visitaIds = visitas.map((v) => v.id);
+
+    const pedidos = await this.db
+      .select()
+      .from(schema.pedido)
+      .where(
+        and(
+          inArray(schema.pedido.visitaMesaId, visitaIds),
+          notInArray(schema.pedido.estado, ['cancelado']),
+        ),
+      );
+
+    const items = pedidos.length
+      ? await this.db
+          .select()
+          .from(schema.itemPedido)
+          .where(
+            inArray(
+              schema.itemPedido.pedidoId,
+              pedidos.map((p) => p.id),
+            ),
+          )
+      : [];
+
+    return visitas.map((visita) => {
+      const pedidosVisita = pedidos.filter((p) => p.visitaMesaId === visita.id);
+      const itemsVisita = items.filter((i) =>
+        pedidosVisita.some((p) => p.id === i.pedidoId),
+      );
+      const totalItems = itemsVisita
+        .filter((i) => i.estado !== 'cancelado')
+        .reduce(
+          (sum, i) => sum + parseFloat(i.precioUnitarioCongelado) * i.cantidad,
+          0,
+        );
+      const costoEnvioVal =
+        visita.tipo === 'delivery' && visita.costoEnvio
+          ? parseFloat(visita.costoEnvio)
+          : 0;
+      const total = totalItems + costoEnvioVal;
+
+      return {
+        id: visita.id,
+        tipo: visita.tipo,
+        nombreCliente: visita.nombreCliente,
+        telefonoCliente: visita.telefonoCliente,
+        direccionDelivery: visita.direccionDelivery,
+        costoEnvio: visita.costoEnvio,
+        fechaApertura: visita.fechaApertura,
+        total: total.toFixed(2),
+        cantidadItems: itemsVisita
+          .filter((i) => i.estado !== 'cancelado')
+          .reduce((sum, i) => sum + i.cantidad, 0),
+      };
     });
   }
 }

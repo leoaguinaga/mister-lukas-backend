@@ -11,8 +11,9 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { auth } from './auth.config';
 
 export const ROLES_KEY = 'roles';
-export const Roles = (...roles: Array<'mesero' | 'cajero' | 'administracion'>) =>
-  SetMetadata(ROLES_KEY, roles);
+export const Roles = (
+  ...roles: Array<'mesero' | 'cajero' | 'administracion'>
+) => SetMetadata(ROLES_KEY, roles);
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -30,15 +31,17 @@ export class AuthGuard implements CanActivate {
     req.user = session.user;
     req.session = session.session;
 
-    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>(
+      ROLES_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
     if (requiredRoles?.length) {
       const userRole = (session.user as { role?: string }).role;
       if (!userRole || !requiredRoles.includes(userRole)) {
-        throw new ForbiddenException(`Rol requerido: ${requiredRoles.join(', ')}`);
+        throw new ForbiddenException(
+          `Rol requerido: ${requiredRoles.join(', ')}`,
+        );
       }
     }
 

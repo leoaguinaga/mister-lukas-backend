@@ -12,7 +12,17 @@ import { AdminModule } from './admin/admin.module';
 import { PromocionesModule } from './promociones/promociones.module';
 
 @Module({
-  imports: [DbModule, AuthModule, CatalogoModule, MesasModule, OperacionModule, PrintModule, CajaModule, AdminModule, PromocionesModule],
+  imports: [
+    DbModule,
+    AuthModule,
+    CatalogoModule,
+    MesasModule,
+    OperacionModule,
+    PrintModule,
+    CajaModule,
+    AdminModule,
+    PromocionesModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

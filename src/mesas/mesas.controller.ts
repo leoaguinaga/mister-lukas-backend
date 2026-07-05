@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+} from '@nestjs/common';
 import { MesasService } from './mesas.service';
 import { AuthGuard, Roles } from '../auth/auth.guard';
 
@@ -29,14 +38,21 @@ export class MesasController {
   @UseGuards(AuthGuard)
   @Roles('administracion')
   update(@Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.mesas.update(id, body as Parameters<MesasService['update']>[1]);
+    return this.mesas.update(id, body);
   }
 
   @Post('layout')
   @UseGuards(AuthGuard)
   @Roles('administracion')
   actualizarLayout(
-    @Body() body: { posiciones: Array<{ id: string; filaPosicion: number | null; colPosicion: number | null }> },
+    @Body()
+    body: {
+      posiciones: Array<{
+        id: string;
+        filaPosicion: number | null;
+        colPosicion: number | null;
+      }>;
+    },
   ) {
     return this.mesas.actualizarLayout(body.posiciones);
   }
