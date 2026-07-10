@@ -27,21 +27,16 @@ export class CajaService {
 
   // ─── Turno activo ─────────────────────────────────────────────────────────
 
-  async getTurnoActivo(cajeroId: string) {
+  async getTurnoActivo() {
     const [turno] = await this.db
       .select()
       .from(schema.turnoCaja)
-      .where(
-        and(
-          eq(schema.turnoCaja.cajeroUsuarioId, cajeroId),
-          eq(schema.turnoCaja.estado, 'abierto'),
-        ),
-      );
+      .where(eq(schema.turnoCaja.estado, 'abierto'));
     return turno ?? null;
   }
 
   async getTurnoConPagos(cajeroId: string) {
-    const turno = await this.getTurnoActivo(cajeroId);
+    const turno = await this.getTurnoActivo();
     if (!turno) return null;
 
     // Join pago → visitaMesa → mesa para obtener el número de mesa
@@ -109,9 +104,9 @@ export class CajaService {
   // ─── Abrir turno ──────────────────────────────────────────────────────────
 
   async abrirTurno(cajeroId: string, montoApertura: number) {
-    const turnoExistente = await this.getTurnoActivo(cajeroId);
+    const turnoExistente = await this.getTurnoActivo();
     if (turnoExistente) {
-      throw new ConflictException('Ya hay un turno abierto para este cajero');
+      throw new ConflictException('Ya hay un turno de caja abierto');
     }
 
     const [turno] = await this.db
@@ -129,7 +124,7 @@ export class CajaService {
     cajeroId: string,
     data: { monto: number; motivo: string },
   ) {
-    const turno = await this.getTurnoActivo(cajeroId);
+    const turno = await this.getTurnoActivo();
     if (!turno) {
       throw new BadRequestException('No hay turno de caja abierto');
     }
@@ -152,7 +147,7 @@ export class CajaService {
     gastoId: string,
     data: { monto: number; motivo: string },
   ) {
-    const turno = await this.getTurnoActivo(cajeroId);
+    const turno = await this.getTurnoActivo();
     if (!turno) {
       throw new BadRequestException('No hay turno de caja abierto');
     }
@@ -184,7 +179,7 @@ export class CajaService {
   }
 
   async eliminarGasto(cajeroId: string, gastoId: string) {
-    const turno = await this.getTurnoActivo(cajeroId);
+    const turno = await this.getTurnoActivo();
     if (!turno) {
       throw new BadRequestException('No hay turno de caja abierto');
     }
@@ -470,7 +465,7 @@ export class CajaService {
     pagos: Array<{ metodoPago: MetodoPago; monto: number }>,
     ajuste?: { motivo: string; monto: number },
   ) {
-    const turno = await this.getTurnoActivo(cajeroId);
+    const turno = await this.getTurnoActivo();
     if (!turno) throw new BadRequestException('No hay turno de caja abierto');
 
     if (!pagos.length)
@@ -790,7 +785,7 @@ export class CajaService {
   // ─── Cerrar turno ─────────────────────────────────────────────────────────
 
   async cerrarTurno(cajeroId: string, montoCierreReal: number) {
-    const turno = await this.getTurnoActivo(cajeroId);
+    const turno = await this.getTurnoActivo();
     if (!turno) throw new NotFoundException('No hay turno abierto');
 
     const pagos = await this.db
