@@ -15,11 +15,42 @@ import { AuthGuard, Roles } from '../auth/auth.guard';
 export class CatalogoController {
   constructor(private readonly catalogo: CatalogoService) {}
 
-  // ─── Público (mesero puede ver la carta sin guard de admin) ───
+  // ─── Público (mesero/cajero pueden ver la carta y categorías) ───
 
   @Get('menu')
   getMenu() {
     return this.catalogo.findPlatosDisponibles();
+  }
+
+  @Get('categorias')
+  getCategorias() {
+    return this.catalogo.findAllCategorias();
+  }
+
+  @Post('categorias')
+  @UseGuards(AuthGuard)
+  @Roles('administracion')
+  createCategoria(
+    @Body()
+    body: {
+      nombre: string;
+      slug: string;
+      descuentaStock?: boolean;
+      esParaCocina?: boolean;
+      orden?: number;
+    },
+  ) {
+    return this.catalogo.createCategoria(body);
+  }
+
+  @Patch('categorias/:id')
+  @UseGuards(AuthGuard)
+  @Roles('administracion')
+  updateCategoria(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.catalogo.updateCategoria(id, body);
   }
 
   // ─── Insumos (admin) ───
@@ -75,13 +106,11 @@ export class CatalogoController {
     body: {
       nombre: string;
       precio: string;
-      categoria: string;
+      categoriaId: string;
       descripcion?: string;
     },
   ) {
-    return this.catalogo.createPlato(
-      body as Parameters<CatalogoService['createPlato']>[0],
-    );
+    return this.catalogo.createPlato(body);
   }
 
   @Post('platos/bulk')
@@ -90,13 +119,11 @@ export class CatalogoController {
   createPlatosBulk(
     @Body()
     body: {
-      categoria: string;
+      categoriaId: string;
       platos: Array<{ nombre: string; precio: string; descripcion?: string }>;
     },
   ) {
-    return this.catalogo.createPlatosBulk(
-      body as Parameters<CatalogoService['createPlatosBulk']>[0],
-    );
+    return this.catalogo.createPlatosBulk(body);
   }
 
   @Patch('platos/:id')

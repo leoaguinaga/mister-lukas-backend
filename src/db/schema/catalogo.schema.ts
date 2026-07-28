@@ -25,21 +25,18 @@ import {
  *         disponible/no disponible manualmente.
  */
 
-export const categoriaProductoEnum = pgEnum('categoria_producto', [
-  'pollo_a_la_brasa',
-  'entradas',
-  'platos_a_la_carta',
-  'parrillas',
-  'parrillas_familiares',
-  'pastas',
-  'guarniciones',
-  'refrescos_jugos',
-  'bebidas',
-  'cocteles',
-  // Productos extra que se cobran a criterio del mesero/cajero: tupper, bolsa,
-  // cubiertos descartables. No tienen receta ni descuentan stock automático.
-  'extras',
-]);
+// --- Categorías de la carta ---
+export const categoriaCarta = pgTable('categoria_carta', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  nombre: text('nombre').notNull(),
+  slug: text('slug').notNull().unique(),
+  descuentaStock: boolean('descuenta_stock').notNull().default(false),
+  esParaCocina: boolean('es_para_cocina').notNull().default(true),
+  orden: integer('orden').notNull().default(0),
+  activo: boolean('activo').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
 
 // --- Insumos (solo aplica a categorias A y B) ---
 // Para "pollo a la brasa", este es el registro de "pollo_entero",
@@ -72,7 +69,9 @@ export const platoCarta = pgTable('plato_carta', {
   nombre: text('nombre').notNull(), // ej. "1/4 Pollo a la brasa", "Lomo saltado", "Inca Kola 500ml"
   descripcion: text('descripcion'),
   precio: numeric('precio', { precision: 10, scale: 2 }).notNull(),
-  categoria: categoriaProductoEnum('categoria').notNull(),
+  categoriaId: uuid('categoria_id')
+    .notNull()
+    .references(() => categoriaCarta.id, { onDelete: 'restrict' }),
 
   // Disponibilidad manual.
   disponible: boolean('disponible').notNull().default(true),

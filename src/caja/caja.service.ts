@@ -843,11 +843,24 @@ export class CajaService {
 
     // Verificar platos y obtener precios
     const platoIds = data.items.map((i) => i.platoCartaId);
-    const platos = await this.db
-      .select()
+    const platosRows = await this.db
+      .select({
+        plato: schema.platoCarta,
+        categoria: schema.categoriaCarta,
+      })
       .from(schema.platoCarta)
+      .leftJoin(
+        schema.categoriaCarta,
+        eq(schema.platoCarta.categoriaId, schema.categoriaCarta.id),
+      )
       .where(inArray(schema.platoCarta.id, platoIds));
-    const platoMap = new Map(platos.map((p) => [p.id, p]));
+
+    const platoMap = new Map(
+      platosRows.map(({ plato, categoria }) => [
+        plato.id,
+        { ...plato, categoria },
+      ]),
+    );
 
     for (const item of data.items) {
       const plato = platoMap.get(item.platoCartaId);
@@ -910,10 +923,10 @@ export class CajaService {
         .values(itemsInsert)
         .returning();
 
-      // Descontar stock para bebidas
+      // Descontar stock para categorías con descuentaStock = true
       for (const itemCreado of itemsCreados) {
         const plato = platoMap.get(itemCreado.platoCartaId)!;
-        if (plato.categoria !== 'bebidas') continue;
+        if (!plato.categoria?.descuentaStock) continue;
 
         const [receta] = await tx
           .select()
@@ -957,15 +970,9 @@ export class CajaService {
       return { visita, pedido, items: itemsCreados };
     });
 
-    const CATEGORIAS_NO_COCINA = new Set([
-      'bebidas',
-      'refrescos_jugos',
-      'cocteles',
-      'extras',
-    ]);
     const itemsCocina = resultado.items.filter((i) => {
       const plato = platoMap.get(i.platoCartaId);
-      return plato && !CATEGORIAS_NO_COCINA.has(plato.categoria);
+      return plato && plato.categoria?.esParaCocina;
     });
 
     if (itemsCocina.length > 0) {
@@ -1022,11 +1029,24 @@ export class CajaService {
 
     // Verificar platos
     const platoIds = data.items.map((i) => i.platoCartaId);
-    const platos = await this.db
-      .select()
+    const platosRows = await this.db
+      .select({
+        plato: schema.platoCarta,
+        categoria: schema.categoriaCarta,
+      })
       .from(schema.platoCarta)
+      .leftJoin(
+        schema.categoriaCarta,
+        eq(schema.platoCarta.categoriaId, schema.categoriaCarta.id),
+      )
       .where(inArray(schema.platoCarta.id, platoIds));
-    const platoMap = new Map(platos.map((p) => [p.id, p]));
+
+    const platoMap = new Map(
+      platosRows.map(({ plato, categoria }) => [
+        plato.id,
+        { ...plato, categoria },
+      ]),
+    );
 
     for (const item of data.items) {
       const plato = platoMap.get(item.platoCartaId);
@@ -1092,10 +1112,10 @@ export class CajaService {
         .values(itemsInsert)
         .returning();
 
-      // Descontar stock para bebidas
+      // Descontar stock para categorías con descuentaStock = true
       for (const itemCreado of itemsCreados) {
         const plato = platoMap.get(itemCreado.platoCartaId)!;
-        if (plato.categoria !== 'bebidas') continue;
+        if (!plato.categoria?.descuentaStock) continue;
 
         const [receta] = await tx
           .select()
@@ -1139,15 +1159,9 @@ export class CajaService {
       return { visita, pedido, items: itemsCreados };
     });
 
-    const CATEGORIAS_NO_COCINA = new Set([
-      'bebidas',
-      'refrescos_jugos',
-      'cocteles',
-      'extras',
-    ]);
     const itemsCocina = resultado.items.filter((i) => {
       const plato = platoMap.get(i.platoCartaId);
-      return plato && !CATEGORIAS_NO_COCINA.has(plato.categoria);
+      return plato && plato.categoria?.esParaCocina;
     });
 
     if (itemsCocina.length > 0) {
@@ -1247,11 +1261,19 @@ export class CajaService {
   }
 
   private async restaurarStockItemTx(tx: any, item: typeof schema.itemPedido.$inferSelect) {
-    const [plato] = await tx
-      .select()
+    const [row] = await tx
+      .select({
+        plato: schema.platoCarta,
+        categoria: schema.categoriaCarta,
+      })
       .from(schema.platoCarta)
+      .leftJoin(
+        schema.categoriaCarta,
+        eq(schema.platoCarta.categoriaId, schema.categoriaCarta.id),
+      )
       .where(eq(schema.platoCarta.id, item.platoCartaId));
-    if (!plato || plato.categoria !== 'bebidas') return;
+
+    if (!row || !row.categoria?.descuentaStock) return;
 
     const [receta] = await tx
       .select()

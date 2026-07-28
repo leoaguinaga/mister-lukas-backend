@@ -1,15 +1,15 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
           MISTER LUKA             
-          ** COCINA **            
+       ** PRECUENTA **          
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-         R-0009
-         ═════════
 Mesa:    1
-Mesero:  Mesero Demo
-Hora:    13/7/2026, 22:02:15
+Fecha:   13/7/2026, 22:05:47
 ─────────────────────────────────
-1x  1/8 Pollo a la brasa
-     → pierna
-1x  1/4 Pollo a la brasa
-     → pecho
+1x 1/8 Pollo a la brasa   S/12.00
+1x 1/4 Pollo a la brasa   S/22.00
+1x Inca Kola 500ml        S/5.00
+─────────────────────────────────
+TOTAL:                     S/ 39.00
+
+** No es un comprobante de pago **
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

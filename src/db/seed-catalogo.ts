@@ -97,13 +97,42 @@ async function main() {
     }
   }
 
+  // ─── Categorías de la carta ────────────────────────────────────────────────
+  const categoriasDef = [
+    { nombre: 'Pollo a la brasa', slug: 'pollo_a_la_brasa', descuentaStock: false, esParaCocina: true, orden: 1 },
+    { nombre: 'Entradas', slug: 'entradas', descuentaStock: false, esParaCocina: true, orden: 2 },
+    { nombre: 'Platos a la carta', slug: 'platos_a_la_carta', descuentaStock: false, esParaCocina: true, orden: 3 },
+    { nombre: 'Parrillas', slug: 'parrillas', descuentaStock: false, esParaCocina: true, orden: 4 },
+    { nombre: 'Parrillas Familiares', slug: 'parrillas_familiares', descuentaStock: false, esParaCocina: true, orden: 5 },
+    { nombre: 'Pastas', slug: 'pastas', descuentaStock: false, esParaCocina: true, orden: 6 },
+    { nombre: 'Guarniciones', slug: 'guarniciones', descuentaStock: false, esParaCocina: true, orden: 7 },
+    { nombre: 'Refrescos o Jugos', slug: 'refrescos_jugos', descuentaStock: false, esParaCocina: false, orden: 8 },
+    { nombre: 'Bebidas', slug: 'bebidas', descuentaStock: true, esParaCocina: false, orden: 9 },
+    { nombre: 'Cócteles', slug: 'cocteles', descuentaStock: false, esParaCocina: false, orden: 10 },
+    { nombre: 'Extras', slug: 'extras', descuentaStock: false, esParaCocina: false, orden: 11 },
+  ];
+
+  const catMap: Record<string, { id: string; descuentaStock: boolean }> = {};
+  for (const c of categoriasDef) {
+    const [existing] = await db
+      .select()
+      .from(schema.categoriaCarta)
+      .where(eq(schema.categoriaCarta.slug, c.slug));
+    if (existing) {
+      catMap[c.slug] = { id: existing.id, descuentaStock: existing.descuentaStock };
+    } else {
+      const [row] = await db.insert(schema.categoriaCarta).values(c).returning();
+      catMap[c.slug] = { id: row.id, descuentaStock: row.descuentaStock };
+      console.log(`✓ Categoría creada: ${c.nombre}`);
+    }
+  }
+
   // ─── Platos de la carta ───────────────────────────────────────────────────
 
-  type CatProd = (typeof schema.categoriaProductoEnum.enumValues)[number];
   const platos: Array<{
     nombre: string;
     precio: string;
-    categoria: CatProd;
+    categoria: string;
     receta?: { insumo: string; cantidad: number };
   }> = [
     // Pollo a la brasa (se ignora stock/receta para evitar fricción operativa)
@@ -228,12 +257,18 @@ async function main() {
       console.log(`✓ Plato ya existe: ${p.nombre}`);
       continue;
     }
+    const catInfo = catMap[p.categoria];
+    if (!catInfo) {
+      console.warn(`⚠️ Categoría no encontrada para ${p.nombre}: ${p.categoria}`);
+      continue;
+    }
+
     const [plato] = await db
       .insert(schema.platoCarta)
       .values({
         nombre: p.nombre,
         precio: p.precio,
-        categoria: p.categoria,
+        categoriaId: catInfo.id,
       })
       .returning();
     console.log(`✓ Plato creado: ${p.nombre} — S/${p.precio}`);
@@ -252,16 +287,18 @@ async function main() {
   }
 
   // ─── Auto-sync disponible según stock del insumo ──────────────────────────
-  // Regla: si el insumo principal de la receta tiene stockActual = 0
-  //        → marcar el plato como disponible = false automáticamente.
-  // Solo aplica a fraccionable y reventa (los que tienen receta con insumo rastreable).
-  // multi_insumo queda siempre en disponible = true (control manual).
-
   console.log('\n→ Sincronizando disponibilidad por stock…');
 
   const todosLosPlatos = await db
-    .select()
+    .select({
+      plato: schema.platoCarta,
+      categoria: schema.categoriaCarta,
+    })
     .from(schema.platoCarta)
+    .leftJoin(
+      schema.categoriaCarta,
+      eq(schema.platoCarta.categoriaId, schema.categoriaCarta.id),
+    )
     .where(eq(schema.platoCarta.activo, true));
   const todasLasRecetas = await db.select().from(schema.recetaPlato);
   const todosLosInsumos = await db.select().from(schema.insumo);
@@ -270,7 +307,6 @@ async function main() {
     todosLosInsumos.map((i) => [i.id, i.stockActual ?? 0]),
   );
 
-  // Agrupar recetas por plato (tomamos el primer insumo de la receta como referencia)
   const recetaPorPlato = new Map<string, string>(); // platoId → insumoId
   for (const r of todasLasRecetas) {
     if (!recetaPorPlato.has(r.platoCartaId)) {
@@ -281,8 +317,8 @@ async function main() {
   let sinStock = 0;
   let conStock = 0;
 
-  for (const plato of todosLosPlatos) {
-    if (plato.categoria !== 'bebidas') continue;
+  for (const { plato, categoria } of todosLosPlatos) {
+    if (!categoria?.descuentaStock) continue;
 
     const insumoId = recetaPorPlato.get(plato.id);
     if (!insumoId) continue;

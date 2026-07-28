@@ -4,9 +4,13 @@ import { DRIZZLE } from '../db/db.module';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from '../db/schema';
 
+type PlatoConCategoria = typeof schema.platoCarta.$inferSelect & {
+  categoria: typeof schema.categoriaCarta.$inferSelect;
+};
+
 // Añade stockActual a los platos A/B a través de su receta + insumo
 async function enrichWithStock(
-  platos: (typeof schema.platoCarta.$inferSelect)[],
+  platos: PlatoConCategoria[],
   db: NodePgDatabase<typeof schema>,
 ) {
   if (!platos.length)
@@ -16,19 +20,6 @@ async function enrichWithStock(
       nombreUnidadMinima: null as string | null,
     }));
 
-  const platoIds = platos.map((p) => p.id);
-  const recetas = await db
-    .select({
-      platoCartaId: schema.recetaPlato.platoCartaId,
-      cantidadConsumida: schema.recetaPlato.cantidadConsumida,
-      stockActual: schema.insumo.stockActual,
-      nombreUnidadMinima: schema.insumo.nombreUnidadMinima,
-    })
-    .from(schema.recetaPlato)
-    .innerJoin(schema.insumo, eq(schema.recetaPlato.insumoId, schema.insumo.id))
-    .where(eq(schema.recetaPlato.platoCartaId, platoIds[0]));
-
-  // Fetch en lote: una query por plato es costoso; hacemos un join simple y filtramos en JS
   const todasRecetas = await db
     .select({
       platoCartaId: schema.recetaPlato.platoCartaId,
@@ -43,16 +34,15 @@ async function enrichWithStock(
     );
 
   const recetaMap = new Map(todasRecetas.map((r) => [r.platoCartaId, r]));
-  void recetas;
 
   return platos.map((p) => {
     const receta = recetaMap.get(p.id);
     return {
       ...p,
       stockActual:
-        p.categoria === 'bebidas' && receta ? receta.stockActual : null,
+        p.categoria?.descuentaStock && receta ? receta.stockActual : null,
       nombreUnidadMinima:
-        p.categoria === 'bebidas' && receta ? receta.nombreUnidadMinima : null,
+        p.categoria?.descuentaStock && receta ? receta.nombreUnidadMinima : null,
     };
   });
 }
@@ -60,6 +50,50 @@ async function enrichWithStock(
 @Injectable()
 export class CatalogoService {
   constructor(@Inject(DRIZZLE) private db: NodePgDatabase<typeof schema>) {}
+
+  // ─── Categorías ───
+
+  async findAllCategorias() {
+    return this.db
+      .select()
+      .from(schema.categoriaCarta)
+      .where(eq(schema.categoriaCarta.activo, true))
+      .orderBy(schema.categoriaCarta.orden);
+  }
+
+  async createCategoria(data: {
+    nombre: string;
+    slug: string;
+    descuentaStock?: boolean;
+    esParaCocina?: boolean;
+    orden?: number;
+  }) {
+    const [row] = await this.db
+      .insert(schema.categoriaCarta)
+      .values(data)
+      .returning();
+    return row;
+  }
+
+  async updateCategoria(
+    id: string,
+    data: Partial<{
+      nombre: string;
+      slug: string;
+      descuentaStock: boolean;
+      esParaCocina: boolean;
+      orden: number;
+      activo: boolean;
+    }>,
+  ) {
+    const [row] = await this.db
+      .update(schema.categoriaCarta)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.categoriaCarta.id, id))
+      .returning();
+    if (!row) throw new NotFoundException('Categoría no encontrada');
+    return row;
+  }
 
   // ─── Insumos ───
 
@@ -112,34 +146,54 @@ export class CatalogoService {
 
   async findAllPlatos() {
     const rows = await this.db
-      .select()
+      .select({
+        plato: schema.platoCarta,
+        categoria: schema.categoriaCarta,
+      })
       .from(schema.platoCarta)
+      .leftJoin(
+        schema.categoriaCarta,
+        eq(schema.platoCarta.categoriaId, schema.categoriaCarta.id),
+      )
       .where(eq(schema.platoCarta.activo, true));
-    return enrichWithStock(rows, this.db);
+
+    const platosFormatted = rows.map(({ plato, categoria }) => ({
+      ...plato,
+      categoria: categoria!,
+    }));
+
+    return enrichWithStock(platosFormatted, this.db);
   }
 
   // Devuelve TODOS los platos activos con stock (disponible o no) para que el mesero vea el estado real
   async findPlatosDisponibles() {
-    const rows = await this.db
-      .select()
-      .from(schema.platoCarta)
-      .where(eq(schema.platoCarta.activo, true));
-    return enrichWithStock(rows, this.db);
+    return this.findAllPlatos();
   }
 
   async findPlatoById(id: string) {
     const [row] = await this.db
-      .select()
+      .select({
+        plato: schema.platoCarta,
+        categoria: schema.categoriaCarta,
+      })
       .from(schema.platoCarta)
+      .leftJoin(
+        schema.categoriaCarta,
+        eq(schema.platoCarta.categoriaId, schema.categoriaCarta.id),
+      )
       .where(eq(schema.platoCarta.id, id));
-    if (!row) throw new NotFoundException('Plato no encontrado');
-    return row;
+
+    if (!row || !row.plato) throw new NotFoundException('Plato no encontrado');
+    return {
+      ...row.plato,
+      categoria: row.categoria!,
+    };
   }
 
   async createPlato(data: {
     nombre: string;
     precio: string;
-    categoria: (typeof schema.categoriaProductoEnum.enumValues)[number];
+    categoriaId: string;
     descripcion?: string;
   }) {
     const [row] = await this.db
@@ -150,7 +204,7 @@ export class CatalogoService {
   }
 
   async createPlatosBulk(data: {
-    categoria: (typeof schema.categoriaProductoEnum.enumValues)[number];
+    categoriaId: string;
     platos: Array<{ nombre: string; precio: string; descripcion?: string }>;
   }) {
     if (!data.platos?.length) {
@@ -159,7 +213,7 @@ export class CatalogoService {
     const values = data.platos.map((p) => ({
       nombre: p.nombre,
       precio: p.precio,
-      categoria: data.categoria,
+      categoriaId: data.categoriaId,
       descripcion: p.descripcion || null,
     }));
     return this.db.insert(schema.platoCarta).values(values).returning();
@@ -171,7 +225,7 @@ export class CatalogoService {
       nombre?: string;
       precio?: string;
       descripcion?: string;
-      categoria?: (typeof schema.categoriaProductoEnum.enumValues)[number];
+      categoriaId?: string;
       disponible?: boolean;
       activo?: boolean;
     },

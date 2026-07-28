@@ -227,14 +227,26 @@ export class OperacionService {
     if (visita.estado === 'cerrada')
       throw new BadRequestException('La visita ya está cerrada');
 
-    // Verificar platos y obtener precios actuales
+    // Verificar platos y obtener precios actuales con su categoría
     const platoIds = items.map((i) => i.platoCartaId);
-    const platos = await this.db
-      .select()
+    const platosRows = await this.db
+      .select({
+        plato: schema.platoCarta,
+        categoria: schema.categoriaCarta,
+      })
       .from(schema.platoCarta)
+      .leftJoin(
+        schema.categoriaCarta,
+        eq(schema.platoCarta.categoriaId, schema.categoriaCarta.id),
+      )
       .where(inArray(schema.platoCarta.id, platoIds));
 
-    const platoMap = new Map(platos.map((p) => [p.id, p]));
+    const platoMap = new Map(
+      platosRows.map(({ plato, categoria }) => [
+        plato.id,
+        { ...plato, categoria },
+      ]),
+    );
 
     for (const item of items) {
       const plato = platoMap.get(item.platoCartaId);
@@ -310,10 +322,10 @@ export class OperacionService {
         .values(itemsInsert)
         .returning();
 
-      // Descontar stock solo para bebidas (las demás categorías no descuentan stock automáticamente)
+      // Descontar stock solo para categorías configuradas para descontar stock (ej. bebidas)
       for (const itemCreado of itemsCreados) {
         const plato = platoMap.get(itemCreado.platoCartaId)!;
-        if (plato.categoria !== 'bebidas') continue;
+        if (!plato.categoria?.descuentaStock) continue;
 
         const [receta] = await tx
           .select()
@@ -358,18 +370,10 @@ export class OperacionService {
       return { ...pedido, items: itemsCreados };
     });
 
-    // Imprimir comanda: solo platos preparados en cocina. Las bebidas, refrescos
-    // y cócteles se sirven directamente desde caja/barra y no necesitan comanda.
-    // Si la ronda es 100% bebidas, no se imprime nada (los items quedan en sistema para cobrar).
-    const CATEGORIAS_NO_COCINA = new Set([
-      'bebidas',
-      'refrescos_jugos',
-      'cocteles',
-      'extras',
-    ]);
+    // Imprimir comanda: solo platos preparados en cocina (esParaCocina = true).
     const itemsCocina = resultado.items.filter((i) => {
       const plato = platoMap.get(i.platoCartaId);
-      return plato && !CATEGORIAS_NO_COCINA.has(plato.categoria);
+      return plato && plato.categoria?.esParaCocina;
     });
 
     if (itemsCocina.length > 0) {
@@ -463,11 +467,19 @@ export class OperacionService {
   private async restaurarStockItem(
     item: typeof schema.itemPedido.$inferSelect,
   ) {
-    const [plato] = await this.db
-      .select()
+    const [row] = await this.db
+      .select({
+        plato: schema.platoCarta,
+        categoria: schema.categoriaCarta,
+      })
       .from(schema.platoCarta)
+      .leftJoin(
+        schema.categoriaCarta,
+        eq(schema.platoCarta.categoriaId, schema.categoriaCarta.id),
+      )
       .where(eq(schema.platoCarta.id, item.platoCartaId));
-    if (!plato || plato.categoria !== 'bebidas') return;
+
+    if (!row || !row.categoria?.descuentaStock) return;
 
     const [receta] = await this.db
       .select()
