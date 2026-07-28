@@ -63,14 +63,26 @@ export class CatalogoService {
 
   async createCategoria(data: {
     nombre: string;
-    slug: string;
+    slug?: string;
     descuentaStock?: boolean;
     esParaCocina?: boolean;
     orden?: number;
   }) {
+    const slug =
+      data.slug?.trim() ||
+      data.nombre
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+
     const [row] = await this.db
       .insert(schema.categoriaCarta)
-      .values(data)
+      .values({
+        ...data,
+        slug,
+      })
       .returning();
     return row;
   }
